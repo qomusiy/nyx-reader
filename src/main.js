@@ -35,6 +35,11 @@ const menu = document.querySelector("#menu");
 const dictionaryContent = document.querySelector("#dictionary-content");
 const searchInput = document.querySelector("#search-input");
 const suggestionsBox = document.querySelector("#suggestions");
+const dictionaryPanel = document.querySelector(".dictionary-panel");
+const sheetGrabber = document.querySelector("#sheet-grabber");
+const scrim = document.querySelector("#scrim");
+const dictButton = document.querySelector("#dict-button");
+const toolsToggle = document.querySelector("#tools-toggle");
 
 const annotationTools = document.querySelector("#annotation-tools");
 const toolSelect = document.querySelector("#tool-select");
@@ -135,6 +140,7 @@ async function openPdf(file) {
     linkService.setDocument(currentDocument);
 
     annotationTools.hidden = false;
+    toolsToggle.hidden = false;
     findButton.hidden = false;
   } catch (error) {
     console.error(error);
@@ -143,7 +149,9 @@ async function openPdf(file) {
     welcome.hidden = false;
     docTitle.textContent = "";
     annotationTools.hidden = true;
+    toolsToggle.hidden = true;
     findButton.hidden = true;
+    document.body.classList.remove("tools-open");
     menuStatus.textContent = "This PDF could not be opened";
   }
 }
@@ -417,6 +425,9 @@ function hideSuggestions() { suggestionsBox.hidden = true; suggestionsBox.replac
 async function lookup(rawWord) {
   const word = (rawWord || "").trim();
   if (!word) return;
+  // On mobile, a fresh lookup (e.g. from tapping a word) opens the compact peek.
+  // If the sheet is already open (user searched), leave its state alone.
+  if (isMobile() && sheetState === "hidden") setSheetState("peek");
   showDictionaryLoading();
   try {
     const rows = await fetchWord(word);
@@ -574,4 +585,148 @@ function setTheme(theme) {
 }
 themeToggleButton.addEventListener("click", () => {
   setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+});
+
+/* ---------- Mobile bottom sheet ---------- */
+const mobileMedia = window.matchMedia("(max-width: 920px)");
+const PEEK_HIDDEN_RATIO = 0.62; // must match `.state-peek` translateY(62%) in CSS
+let sheetState = "hidden"; // "hidden" | "peek" | "full"
+
+function isMobile() { return mobileMedia.matches; }
+
+function setSheetState(state) {
+  sheetState = state;
+  dictionaryPanel.style.transform = "";
+  dictionaryPanel.classList.toggle("state-peek", state === "peek");
+  dictionaryPanel.classList.toggle("state-full", state === "full");
+  document.body.classList.toggle("sheet-full", state === "full");
+}
+
+// Dictionary button: toggle the sheet open (full) / closed.
+dictButton.addEventListener("click", () => {
+  if (!isMobile()) return;
+  if (sheetState === "full") {
+    setSheetState("hidden");
+  } else {
+    setSheetState("full");
+    setTimeout(() => searchInput.focus(), 60);
+  }
+});
+
+// Pen button: reveal / hide the annotation tool strip.
+toolsToggle.addEventListener("click", (event) => {
+  event.stopPropagation();
+  const open = document.body.classList.toggle("tools-open");
+  toolsToggle.classList.toggle("active", open);
+});
+
+// Tap the dimmed backdrop to close the sheet.
+scrim.addEventListener("click", () => setSheetState("hidden"));
+
+// Tap the compact peek to expand it to full detail.
+dictionaryContent.addEventListener("click", (event) => {
+  if (isMobile() && sheetState === "peek" && !event.target.closest("button, a")) {
+    setSheetState("full");
+  }
+});
+
+/* ----- Grabber: tap to toggle, drag to snap between states ----- */
+function stateTranslate(state, height) {
+  if (state === "full") return 0;
+  if (state === "peek") return height * PEEK_HIDDEN_RATIO;
+  return height; // hidden
+}
+
+let drag = null;
+sheetGrabber.addEventListener("pointerdown", (event) => {
+  if (!isMobile()) return;
+  const height = dictionaryPanel.offsetHeight;
+  drag = { startY: event.clientY, height, lastT: stateTranslate(sheetState, height), moved: false };
+  dictionaryPanel.style.transition = "none";
+  sheetGrabber.setPointerCapture(event.pointerId);
+});
+sheetGrabber.addEventListener("pointermove", (event) => {
+  if (!drag) return;
+  const dy = event.clientY - drag.startY;
+  if (Math.abs(dy) > 4) drag.moved = true;
+  drag.lastT = Math.min(Math.max(stateTranslate(sheetState, drag.height) + dy, 0), drag.height);
+  dictionaryPanel.style.transform = `translateY(${drag.lastT}px)`;
+});
+function endDrag() {
+  if (!drag) return;
+  const { height, lastT, moved } = drag;
+  drag = null;
+  dictionaryPanel.style.transition = "";
+  if (!moved) {
+    setSheetState(sheetState === "full" ? "peek" : "full");
+    return;
+  }
+  const candidates = [["full", 0], ["peek", height * PEEK_HIDDEN_RATIO], ["hidden", height]];
+  let best = candidates[0];
+  for (const candidate of candidates) {
+    if (Math.abs(candidate[1] - lastT) < Math.abs(best[1] - lastT)) best = candidate;
+  }
+  setSheetState(best[0]);
+}
+sheetGrabber.addEventListener("pointerup", endDrag);
+sheetGrabber.addEventListener("pointercancel", endDrag);
+
+/* ----- Touch: long-press a single word to look it up ----- */
+let lastSelectionWord = "";
+let selectionTimer = null;
+document.addEventListener("selectionchange", () => {
+  if (!isMobile()) return;
+  clearTimeout(selectionTimer);
+  selectionTimer = setTimeout(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) { lastSelectionWord = ""; return; }
+    const anchor = selection.anchorNode;
+    const element = anchor && (anchor.nodeType === 3 ? anchor.parentElement : anchor);
+    if (!element || !element.closest || !element.closest(".textLayer")) return;
+    const text = selection.toString();
+    if (!text || text.trim().includes(" ")) return; // single word only — leave phrases for copy
+    const word = extractLookupWord(text);
+    if (!word || word === lastSelectionWord) return;
+    lastSelectionWord = word;
+    searchInput.value = word;
+    lookup(word);
+  }, 350);
+});
+
+/* ----- Touch: quick tap on the page toggles immersive chrome ----- */
+function toggleChrome() {
+  if (!isMobile()) return;
+  const hidden = document.body.classList.toggle("chrome-hidden");
+  if (hidden) {
+    document.body.classList.remove("tools-open");
+    toolsToggle.classList.remove("active");
+  }
+}
+
+let tapStart = null;
+container.addEventListener("pointerdown", (event) => {
+  if (event.pointerType !== "touch") return;
+  tapStart = { x: event.clientX, y: event.clientY, time: Date.now() };
+}, { passive: true });
+container.addEventListener("pointerup", (event) => {
+  if (event.pointerType !== "touch" || !tapStart) return;
+  const movedX = Math.abs(event.clientX - tapStart.x);
+  const movedY = Math.abs(event.clientY - tapStart.y);
+  const elapsed = Date.now() - tapStart.time;
+  tapStart = null;
+  if (sheetState !== "hidden") return;        // don't toggle chrome while the sheet is open
+  if (movedX > 8 || movedY > 8 || elapsed > 300) return; // scroll or long-press, not a tap
+  const selection = window.getSelection();
+  if (selection && !selection.isCollapsed) return; // a word got selected — not a chrome tap
+  toggleChrome();
+}, { passive: true });
+
+// Returning to desktop layout: clear any mobile-only state.
+mobileMedia.addEventListener("change", () => {
+  if (!mobileMedia.matches) {
+    setSheetState("hidden");
+    document.body.classList.remove("chrome-hidden", "tools-open", "sheet-full");
+    dictionaryPanel.style.transform = "";
+    dictionaryPanel.style.transition = "";
+  }
 });
