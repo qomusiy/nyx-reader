@@ -268,30 +268,47 @@ button, label, input { font: inherit; }
   .doc-title { display: none; }
   body.chrome-hidden .topbar { transform: translateY(-100%); }
 
+  /* Menu fits any phone: scroll instead of running off the bottom */
+  .menu {
+    left: 10px;
+    max-height: calc(100dvh - var(--toolbar-height) - env(safe-area-inset-top) - 20px);
+    overflow-y: auto;
+  }
+
   /* ----- Workspace fills the screen; sheet overlays it (no reflow) ----- */
   .workspace { top: calc(var(--toolbar-height) + env(safe-area-inset-top)); transition: top 0.3s ease; }
   body.chrome-hidden .workspace { top: 0; }
-  .viewer-container { right: 0; bottom: 0; }
+  /* pan-x/pan-y lets the page scroll but reserves pinch for our PDF zoom */
+  .viewer-container { right: 0; bottom: 0; touch-action: pan-x pan-y; }
+  /* Reading uses tap-to-define; keep text unselectable so no OS callout fires.
+     Highlight mode adds .select-mode to turn selection back on. */
+  .viewer-container:not(.select-mode) .textLayer { user-select: none; -webkit-user-select: none; }
 
   /* ----- Annotation tools collapse behind the pen button (WPS-style) ----- */
   #tools-toggle:not([hidden]) { display: grid; }
   #dict-button:not([hidden]) { display: grid; }
   .annotation-tools {
     position: fixed;
-    top: calc(var(--toolbar-height) + env(safe-area-inset-top));
-    left: 0; right: 0;
-    justify-content: center; flex-wrap: wrap; gap: 8px;
+    top: calc(var(--toolbar-height) + env(safe-area-inset-top) + 8px);
+    left: 50%;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px;
     padding: 10px 14px;
     background: var(--surface-solid);
-    border-bottom: 1px solid var(--border);
+    border: 1px solid var(--border);
+    border-radius: 16px;
     box-shadow: var(--shadow-pop);
-    transform: translateY(-130%);
-    transition: transform 0.25s ease;
+    opacity: 0; pointer-events: none;
+    transform: translate(-50%, -180%);
+    transition: transform 0.25s ease, opacity 0.25s ease;
     z-index: 25;
   }
-  body.tools-open .annotation-tools { transform: translateY(0); }
-  body.chrome-hidden .annotation-tools { transform: translateY(-130%); }
+  body.tools-open .annotation-tools { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+  body.chrome-hidden .annotation-tools { opacity: 0; pointer-events: none; transform: translate(-50%, -180%); }
   .annotation-tools .topbar-divider { display: none; }
+  /* swatches always drop to their own centered row under the tools */
+  .annotation-tools .highlight-colors { flex-basis: 100%; justify-content: center; padding-left: 0; gap: 12px; }
   .tool-btn { width: 46px; height: 46px; }
   .swatch { width: 30px; height: 30px; }
 

@@ -199,11 +199,17 @@ invertButton.addEventListener("click", () => {
 });
 
 /* ---------- Annotation tools ---------- */
+let annotationActive = false; // true for highlight or note — taps belong to the editor
 function setTool(tool) {
   toolSelect.classList.toggle("active", tool === "select");
   toolHighlight.classList.toggle("active", tool === "highlight");
   toolNote.classList.toggle("active", tool === "note");
   highlightColors.hidden = tool !== "highlight";
+
+  // Highlighting needs real text selection; reading uses tap-to-define, so we
+  // keep the text layer unselectable except in highlight mode (no OS callout).
+  annotationActive = tool !== "select";
+  container.classList.toggle("select-mode", tool === "highlight");
 
   const mode =
     tool === "highlight" ? AnnotationEditorType.HIGHLIGHT :
@@ -671,29 +677,6 @@ function endDrag() {
 sheetGrabber.addEventListener("pointerup", endDrag);
 sheetGrabber.addEventListener("pointercancel", endDrag);
 
-/* ----- Touch: long-press a single word to look it up ----- */
-let lastSelectionWord = "";
-let selectionTimer = null;
-document.addEventListener("selectionchange", () => {
-  if (!isMobile()) return;
-  clearTimeout(selectionTimer);
-  selectionTimer = setTimeout(() => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) { lastSelectionWord = ""; return; }
-    const anchor = selection.anchorNode;
-    const element = anchor && (anchor.nodeType === 3 ? anchor.parentElement : anchor);
-    if (!element || !element.closest || !element.closest(".textLayer")) return;
-    const text = selection.toString();
-    if (!text || text.trim().includes(" ")) return; // single word only — leave phrases for copy
-    const word = extractLookupWord(text);
-    if (!word || word === lastSelectionWord) return;
-    lastSelectionWord = word;
-    searchInput.value = word;
-    lookup(word);
-  }, 350);
-});
-
-/* ----- Touch: quick tap on the page toggles immersive chrome ----- */
 function toggleChrome() {
   if (!isMobile()) return;
   const hidden = document.body.classList.toggle("chrome-hidden");
@@ -701,6 +684,28 @@ function toggleChrome() {
     document.body.classList.remove("tools-open");
     toolsToggle.classList.remove("active");
   }
+}
+
+/* ----- Touch: tap a word to define it; tap empty space to toggle chrome ----- */
+// Find the word under a screen point without creating a text selection,
+// so Android's selection callout / Circle-to-Search never fires while reading.
+function wordAtPoint(x, y) {
+  let range = null;
+  if (document.caretRangeFromPoint) {
+    range = document.caretRangeFromPoint(x, y);
+  } else if (document.caretPositionFromPoint) {
+    const pos = document.caretPositionFromPoint(x, y);
+    if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); }
+  }
+  const node = range && range.startContainer;
+  if (!node || node.nodeType !== 3 || !node.parentElement?.closest(".textLayer")) return "";
+  const text = node.textContent || "";
+  const isWordChar = (ch) => ch && /[A-Za-z'’-]/.test(ch);
+  let start = range.startOffset;
+  let end = range.startOffset;
+  while (start > 0 && isWordChar(text[start - 1])) start--;
+  while (end < text.length && isWordChar(text[end])) end++;
+  return extractLookupWord(text.slice(start, end));
 }
 
 let tapStart = null;
@@ -714,11 +719,45 @@ container.addEventListener("pointerup", (event) => {
   const movedY = Math.abs(event.clientY - tapStart.y);
   const elapsed = Date.now() - tapStart.time;
   tapStart = null;
-  if (sheetState !== "hidden") return;        // don't toggle chrome while the sheet is open
-  if (movedX > 8 || movedY > 8 || elapsed > 300) return; // scroll or long-press, not a tap
-  const selection = window.getSelection();
-  if (selection && !selection.isCollapsed) return; // a word got selected — not a chrome tap
-  toggleChrome();
+  if (movedX > 10 || movedY > 10 || elapsed > 500) return; // scroll/hold, not a tap
+  if (annotationActive) return; // highlight/note mode: taps belong to the annotation editor
+  const word = wordAtPoint(event.clientX, event.clientY);
+  if (word) {
+    searchInput.value = word;
+    lookup(word);
+  } else if (sheetState === "hidden") {
+    toggleChrome();
+  }
+}, { passive: true });
+
+/* ----- Touch: pinch to zoom the PDF (not the whole page) ----- */
+function touchDistance(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+
+let pinch = null;
+let pendingScale = null;
+let scaleRaf = null;
+function applyPendingScale() {
+  scaleRaf = null;
+  if (pendingScale != null) { pdfViewer.currentScale = pendingScale; pendingScale = null; }
+}
+container.addEventListener("touchstart", (event) => {
+  if (event.touches.length === 2 && currentDocument) {
+    pinch = { startDistance: touchDistance(event.touches), startScale: pdfViewer.currentScale };
+  }
+}, { passive: false });
+container.addEventListener("touchmove", (event) => {
+  if (!pinch || event.touches.length !== 2) return;
+  event.preventDefault(); // stop the browser from zooming the whole page
+  const ratio = touchDistance(event.touches) / pinch.startDistance;
+  pendingScale = Math.min(Math.max(pinch.startScale * ratio, 0.25), 6);
+  if (!scaleRaf) scaleRaf = requestAnimationFrame(applyPendingScale);
+}, { passive: false });
+container.addEventListener("touchend", (event) => {
+  if (event.touches.length < 2) pinch = null;
 }, { passive: true });
 
 // Returning to desktop layout: clear any mobile-only state.
