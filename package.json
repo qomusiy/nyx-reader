@@ -1,0 +1,18 @@
+{
+  "name": "plainpdf-dictionary-v2",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pdfjs-dist": "5.7.284",
+    "sql.js": "1.14.1"
+  },
+  "devDependencies": {
+    "vite": "8.0.14"
+  }
+}
