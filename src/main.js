@@ -7,12 +7,10 @@ import {
   ScrollMode,
   SpreadMode,
 } from "pdfjs-dist/web/pdf_viewer.mjs";
-import initSqlJs from "sql.js";
-
 import "pdfjs-dist/web/pdf_viewer.css";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import "./style.css";
+import { fetchWord, suggestWords } from "./dictionary.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -85,8 +83,6 @@ let loadingTask = null;
 let currentDocument = null;
 let currentDocName = "";
 let currentFileSize = 0;
-let dictionaryDatabase = null;
-let dictionaryError = null;
 
 const DEFAULT_HIGHLIGHT = "#fff066";
 const spreadCycle = [SpreadMode.NONE, SpreadMode.ODD, SpreadMode.EVEN];
@@ -96,7 +92,6 @@ let continuous = true;
 let inverted = false;
 let currentQuery = "";
 
-const dictionaryReady = loadDictionary();
 startTheme();
 
 /* ---------- Menu ---------- */
@@ -372,88 +367,10 @@ container.addEventListener("dblclick", async (event) => {
   await lookup(word);
 });
 
-async function loadDictionary() {
-  try {
-    const SQL = await initSqlJs({ locateFile: () => sqlWasmUrl });
-    const response = await fetch("/dictionary.db");
-    if (!response.ok) throw new Error(`Database request failed: ${response.status}`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    dictionaryDatabase = new SQL.Database(bytes);
-  } catch (error) {
-    console.error(error);
-    dictionaryError = error;
-    showDictionaryMessage("Dictionary database could not be loaded.", "error");
-  }
-}
-
 function extractLookupWord(text) {
   const cleaned = text.replaceAll("’", "'").trim();
   const match = cleaned.match(/[A-Za-z]+(?:['-][A-Za-z]+)*/);
   return match ? match[0].toLowerCase() : "";
-}
-
-function findWord(word) {
-  const query = `
-    WITH resolved_entries AS (
-      SELECT
-        e.id AS entry_id,
-        e.parent_word,
-        e.normalized_word AS word,
-        COALESCE(NULLIF(TRIM(e.word_class), ''), NULLIF(TRIM(p.word_class), '')) AS word_class,
-        COALESCE(NULLIF(TRIM(e.word_level), ''), NULLIF(TRIM(p.word_level), '')) AS word_level,
-        COALESCE(NULLIF(TRIM(e.pronunciation), ''), NULLIF(TRIM(p.pronunciation), '')) AS pronunciation
-      FROM entries AS e
-      LEFT JOIN entries AS p ON e.parent_word = p.id
-      WHERE e.normalized_word = :word COLLATE NOCASE
-    )
-    SELECT
-      r.entry_id, r.parent_word, r.word, r.word_class, r.word_level, r.pronunciation,
-      (
-        SELECT GROUP_CONCAT(translation, CHAR(31))
-        FROM (SELECT DISTINCT translation FROM translations WHERE entry_id = r.entry_id ORDER BY id)
-      ) AS translations,
-      COALESCE((
-        SELECT GROUP_CONCAT(example, CHAR(10))
-        FROM (SELECT DISTINCT example FROM examples WHERE entry_id = r.entry_id ORDER BY id)
-      ), '') AS examples
-    FROM resolved_entries AS r
-    WHERE EXISTS (SELECT 1 FROM translations WHERE entry_id = r.entry_id)
-    ORDER BY
-      CASE LOWER(COALESCE(r.word_class, ''))
-        WHEN 'adjective' THEN 1 WHEN 'noun' THEN 2 WHEN 'verb' THEN 3 WHEN 'adverb' THEN 4
-        WHEN 'pronoun' THEN 5 WHEN 'preposition' THEN 6 WHEN 'conjunction' THEN 7 WHEN 'interjection' THEN 8
-        ELSE 99
-      END,
-      CASE WHEN r.parent_word IS NULL THEN r.entry_id ELSE r.parent_word END,
-      CASE WHEN r.parent_word IS NULL THEN 0 ELSE 1 END,
-      r.entry_id
-  `;
-  const statement = dictionaryDatabase.prepare(query);
-  const rows = [];
-  try {
-    statement.bind({ ":word": word });
-    while (statement.step()) rows.push(statement.getAsObject());
-  } finally { statement.free(); }
-  return rows;
-}
-
-function suggestWords(prefix) {
-  if (!dictionaryDatabase) return [];
-  const query = `
-    SELECT DISTINCT normalized_word AS word
-    FROM entries
-    WHERE normalized_word LIKE :prefix COLLATE NOCASE
-      AND EXISTS (SELECT 1 FROM translations WHERE entry_id = entries.id)
-    ORDER BY LENGTH(normalized_word), normalized_word
-    LIMIT 8
-  `;
-  const statement = dictionaryDatabase.prepare(query);
-  const words = [];
-  try {
-    statement.bind({ ":prefix": `${prefix}%` });
-    while (statement.step()) words.push(statement.getAsObject().word);
-  } finally { statement.free(); }
-  return words;
 }
 
 let suggestTimer = null;
@@ -462,11 +379,14 @@ searchInput.addEventListener("input", () => {
   clearTimeout(suggestTimer);
   if (!prefix) { hideSuggestions(); return; }
   suggestTimer = setTimeout(async () => {
-    await dictionaryReady;
-    if (dictionaryError || !dictionaryDatabase) return;
-    if (searchInput.value.trim().toLowerCase() !== prefix) return;
-    renderSuggestions(suggestWords(prefix));
-  }, 120);
+    try {
+      const words = await suggestWords(prefix);
+      if (searchInput.value.trim().toLowerCase() !== prefix) return;
+      renderSuggestions(words);
+    } catch (error) {
+      hideSuggestions();
+    }
+  }, 200);
 });
 searchInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") { event.preventDefault(); hideSuggestions(); lookup(searchInput.value); }
@@ -495,12 +415,16 @@ function renderSuggestions(words) {
 function hideSuggestions() { suggestionsBox.hidden = true; suggestionsBox.replaceChildren(); }
 
 async function lookup(rawWord) {
-  const word = extractLookupWord(rawWord) || rawWord.trim().toLowerCase();
+  const word = (rawWord || "").trim();
   if (!word) return;
-  showDictionaryMessage("Searching…");
-  await dictionaryReady;
-  if (dictionaryError || !dictionaryDatabase) { showDictionaryMessage("Dictionary could not be loaded.", "error"); return; }
-  renderDictionaryResult(word, findWord(word));
+  showDictionaryLoading();
+  try {
+    const rows = await fetchWord(word);
+    renderDictionaryResult(word.toLowerCase(), rows);
+  } catch (error) {
+    console.error(error);
+    showDictionaryMessage("Could not reach the dictionary. Check your connection and try again.", "error");
+  }
 }
 
 function renderDictionaryResult(word, rows) {
@@ -598,6 +522,16 @@ function buildSense(row, number) {
 function showDictionaryMessage(message, kind = "normal") {
   dictionaryContent.replaceChildren();
   dictionaryContent.append(createTextElement("div", message, `dictionary-message ${kind}`));
+}
+
+function showDictionaryLoading() {
+  dictionaryContent.replaceChildren();
+  const wrap = document.createElement("div");
+  wrap.className = "dictionary-loading";
+  const spinner = document.createElement("div");
+  spinner.className = "spinner";
+  wrap.append(spinner, createTextElement("span", "Searching…"));
+  dictionaryContent.append(wrap);
 }
 
 function createTextElement(tagName, text, className = "") {
