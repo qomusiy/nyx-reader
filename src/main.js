@@ -51,11 +51,18 @@ const swatches = [...document.querySelectorAll(".swatch")];
 const continuousButton = document.querySelector("#toggle-continuous");
 const spreadButton = document.querySelector("#cycle-spread");
 const spreadState = document.querySelector("#spread-state");
-const rotateButton = document.querySelector("#rotate");
-const invertButton = document.querySelector("#toggle-invert");
+const rotateLeftButton = document.querySelector("#rotate-left");
+const rotateRightButton = document.querySelector("#rotate-right");
+const fullscreenButton = document.querySelector("#fullscreen");
+const fullscreenLabel = document.querySelector("#fullscreen-label");
 const savePdfButton = document.querySelector("#save-pdf");
 const propertiesButton = document.querySelector("#properties");
 const shortcutsButton = document.querySelector("#shortcuts");
+
+const editUndo = document.querySelector("#edit-undo");
+const editRedo = document.querySelector("#edit-redo");
+const editDelete = document.querySelector("#edit-delete");
+const sheetClose = document.querySelector("#sheet-close");
 
 const findButton = document.querySelector("#find-button");
 const findBar = document.querySelector("#find-bar");
@@ -94,7 +101,6 @@ const spreadCycle = [SpreadMode.NONE, SpreadMode.ODD, SpreadMode.EVEN];
 const spreadLabels = ["Off", "Odd left", "Even left"];
 let spreadIndex = 0;
 let continuous = true;
-let inverted = false;
 let currentQuery = "";
 
 startTheme();
@@ -170,9 +176,23 @@ eventBus.on("scalechanging", ({ scale, presetValue }) => {
 });
 
 /* ---------- Zoom & view modes ---------- */
-zoomInButton.addEventListener("click", () => { if (currentDocument) pdfViewer.currentScale *= 1.1; });
-zoomOutButton.addEventListener("click", () => { if (currentDocument) pdfViewer.currentScale /= 1.1; });
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 6;
+function zoomBy(factor) {
+  if (!currentDocument) return;
+  pdfViewer.currentScale = Math.min(Math.max(pdfViewer.currentScale * factor, MIN_SCALE), MAX_SCALE);
+}
+zoomInButton.addEventListener("click", () => zoomBy(1.1));
+zoomOutButton.addEventListener("click", () => zoomBy(1 / 1.1));
 fitWidthButton.addEventListener("click", () => { if (currentDocument) pdfViewer.currentScaleValue = "page-width"; closeMenu(); });
+
+// Desktop: Ctrl/⌘ + wheel zooms the PDF (also covers trackpad pinch, which
+// the browser reports as a ctrl-wheel event). Plain scrolling is untouched.
+container.addEventListener("wheel", (event) => {
+  if (!(event.ctrlKey || event.metaKey) || !currentDocument) return;
+  event.preventDefault();
+  zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1);
+}, { passive: false });
 
 continuousButton.addEventListener("click", () => {
   continuous = !continuous;
@@ -186,16 +206,14 @@ spreadButton.addEventListener("click", () => {
   spreadState.textContent = spreadLabels[spreadIndex];
 });
 
-rotateButton.addEventListener("click", () => {
+// Rotate stays inside the open menu so you can tap repeatedly.
+rotateRightButton.addEventListener("click", () => {
   if (!currentDocument) return;
   pdfViewer.pagesRotation = (pdfViewer.pagesRotation + 90) % 360;
-  closeMenu();
 });
-
-invertButton.addEventListener("click", () => {
-  inverted = !inverted;
-  container.classList.toggle("invert-pages", inverted);
-  invertButton.classList.toggle("on", inverted);
+rotateLeftButton.addEventListener("click", () => {
+  if (!currentDocument) return;
+  pdfViewer.pagesRotation = (pdfViewer.pagesRotation + 270) % 360;
 });
 
 /* ---------- Annotation tools ---------- */
@@ -219,13 +237,23 @@ function setTool(tool) {
   try { pdfViewer.annotationEditorMode = { mode }; } catch (error) { console.error(error); }
 }
 
+let highlightColor = DEFAULT_HIGHLIGHT;
 function setHighlightColor(color) {
+  // HIGHLIGHT_COLOR sets the default for new highlights and recolors any
+  // currently-selected one. (HIGHLIGHT_DEFAULT_COLOR doesn't exist in pdfjs 5.)
+  highlightColor = color;
   eventBus.dispatch("switchannotationeditorparams", {
     source: window,
-    type: AnnotationEditorParamsType.HIGHLIGHT_DEFAULT_COLOR,
+    type: AnnotationEditorParamsType.HIGHLIGHT_COLOR,
     value: color,
   });
 }
+
+// Switching INTO highlight mode from read mode is async (pdfjs defers it), so a
+// color set in the same click is dropped. Re-apply it once the mode is live.
+eventBus.on("annotationeditormodechanged", ({ mode }) => {
+  if (mode === AnnotationEditorType.HIGHLIGHT) setHighlightColor(highlightColor);
+});
 
 toolSelect.addEventListener("click", () => setTool("select"));
 toolHighlight.addEventListener("click", () => setTool("highlight"));
@@ -234,10 +262,19 @@ toolNote.addEventListener("click", () => setTool("note"));
 swatches.forEach((swatch) => {
   swatch.addEventListener("click", () => {
     swatches.forEach((other) => other.classList.toggle("active", other === swatch));
-    setHighlightColor(swatch.dataset.color);
     setTool("highlight");
+    setHighlightColor(swatch.dataset.color);
   });
 });
+
+/* ---------- Annotation undo / redo / delete ---------- */
+function editingAction(name) {
+  if (!currentDocument) return;
+  eventBus.dispatch("editingaction", { source: window, name });
+}
+editUndo.addEventListener("click", () => editingAction("undo"));
+editRedo.addEventListener("click", () => editingAction("redo"));
+editDelete.addEventListener("click", () => editingAction("delete"));
 
 /* ---------- Save annotated copy ---------- */
 savePdfButton.addEventListener("click", async () => {
@@ -295,7 +332,9 @@ shortcutsButton.addEventListener("click", () => {
     ["Find in document", "Ctrl / ⌘ + F"],
     ["Close find / dialog", "Esc"],
     ["Look up a word", "Double-click it"],
-    ["Zoom in / out", "Menu → + / −"],
+    ["Zoom in / out", "Ctrl / ⌘ + +  /  −"],
+    ["Fit width", "Ctrl / ⌘ + 0"],
+    ["Zoom with mouse", "Ctrl / ⌘ + scroll"],
   ];
   const fragment = document.createDocumentFragment();
   shortcuts.forEach(([label, keys]) => {
@@ -363,6 +402,11 @@ document.addEventListener("keydown", (event) => {
     openFind();
     return;
   }
+  if ((event.ctrlKey || event.metaKey) && currentDocument) {
+    if (event.key === "=" || event.key === "+") { event.preventDefault(); zoomBy(1.1); return; }
+    if (event.key === "-") { event.preventDefault(); zoomBy(1 / 1.1); return; }
+    if (event.key === "0") { event.preventDefault(); pdfViewer.currentScaleValue = "page-width"; return; }
+  }
   if (event.key === "Escape") {
     if (!modal.hidden) { closeModal(); return; }
     if (!findBar.hidden) { closeFind(); return; }
@@ -371,11 +415,25 @@ document.addEventListener("keydown", (event) => {
 });
 
 /* ---------- Dictionary lookup ---------- */
+// Tint the looked-up word on the page (CSS Custom Highlight API) so it's clear
+// which word the dictionary is showing. Passing null clears it.
+let lookupHighlight = null;
+function setLookupRange(range) {
+  if (typeof Highlight === "undefined" || !CSS.highlights) return;
+  if (!lookupHighlight) {
+    lookupHighlight = new Highlight();
+    CSS.highlights.set("lookup-word", lookupHighlight);
+  }
+  lookupHighlight.clear();
+  if (range) lookupHighlight.add(range);
+}
+
 container.addEventListener("dblclick", async (event) => {
   if (!event.target.closest(".textLayer")) return;
-  const selectedText = window.getSelection()?.toString() ?? "";
-  const word = extractLookupWord(selectedText);
+  const selection = window.getSelection();
+  const word = extractLookupWord(selection?.toString() ?? "");
   if (!word) return;
+  if (selection?.rangeCount) setLookupRange(selection.getRangeAt(0).cloneRange());
   searchInput.value = word;
   hideSuggestions();
   await lookup(word);
@@ -403,7 +461,7 @@ searchInput.addEventListener("input", () => {
   }, 200);
 });
 searchInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") { event.preventDefault(); hideSuggestions(); lookup(searchInput.value); }
+  if (event.key === "Enter") { event.preventDefault(); hideSuggestions(); setLookupRange(null); lookup(searchInput.value); }
   else if (event.key === "Escape") { hideSuggestions(); }
 });
 searchInput.addEventListener("blur", () => setTimeout(hideSuggestions, 150));
@@ -420,6 +478,7 @@ function renderSuggestions(words) {
       event.preventDefault();
       searchInput.value = word;
       hideSuggestions();
+      setLookupRange(null);
       lookup(word);
     });
     suggestionsBox.append(item);
@@ -587,10 +646,25 @@ function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   themeIcon.textContent = isDark ? "☀" : "☾";
   themeLabel.textContent = isDark ? "Day mode" : "Night mode";
+  // One switch: night mode darkens the UI *and* the pages, day restores both.
+  container.classList.toggle("invert-pages", isDark);
   localStorage.setItem("nyx-theme", theme);
 }
 themeToggleButton.addEventListener("click", () => {
   setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+});
+
+/* ---------- Fullscreen ---------- */
+fullscreenButton.addEventListener("click", () => {
+  closeMenu();
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    document.documentElement.requestFullscreen?.().catch((error) => console.error(error));
+  }
+});
+document.addEventListener("fullscreenchange", () => {
+  fullscreenLabel.textContent = document.fullscreenElement ? "Exit fullscreen" : "Enter fullscreen";
 });
 
 /* ---------- Mobile bottom sheet ---------- */
@@ -626,8 +700,9 @@ toolsToggle.addEventListener("click", (event) => {
   toolsToggle.classList.toggle("active", open);
 });
 
-// Tap the dimmed backdrop to close the sheet.
+// Tap the dimmed backdrop, or the ✕ in the sheet header, to close the sheet.
 scrim.addEventListener("click", () => setSheetState("hidden"));
+sheetClose.addEventListener("click", () => setSheetState("hidden"));
 
 // Tap the compact peek to expand it to full detail.
 dictionaryContent.addEventListener("click", (event) => {
@@ -698,14 +773,19 @@ function wordAtPoint(x, y) {
     if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); }
   }
   const node = range && range.startContainer;
-  if (!node || node.nodeType !== 3 || !node.parentElement?.closest(".textLayer")) return "";
+  if (!node || node.nodeType !== 3 || !node.parentElement?.closest(".textLayer")) return null;
   const text = node.textContent || "";
   const isWordChar = (ch) => ch && /[A-Za-z'’-]/.test(ch);
   let start = range.startOffset;
   let end = range.startOffset;
   while (start > 0 && isWordChar(text[start - 1])) start--;
   while (end < text.length && isWordChar(text[end])) end++;
-  return extractLookupWord(text.slice(start, end));
+  const word = extractLookupWord(text.slice(start, end));
+  if (!word) return null;
+  const wordRange = document.createRange();
+  wordRange.setStart(node, start);
+  wordRange.setEnd(node, end);
+  return { word, range: wordRange };
 }
 
 let tapStart = null;
@@ -721,10 +801,11 @@ container.addEventListener("pointerup", (event) => {
   tapStart = null;
   if (movedX > 10 || movedY > 10 || elapsed > 500) return; // scroll/hold, not a tap
   if (annotationActive) return; // highlight/note mode: taps belong to the annotation editor
-  const word = wordAtPoint(event.clientX, event.clientY);
-  if (word) {
-    searchInput.value = word;
-    lookup(word);
+  const hit = wordAtPoint(event.clientX, event.clientY);
+  if (hit) {
+    setLookupRange(hit.range);
+    searchInput.value = hit.word;
+    lookup(hit.word);
   } else if (sheetState === "hidden") {
     toggleChrome();
   }
