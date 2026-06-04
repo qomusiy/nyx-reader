@@ -50,6 +50,9 @@
             <span class="zoom-label">Rotate</span>
             <button id="rotate-right" class="zoom-step" type="button" aria-label="Rotate right">↻</button>
           </div>
+          <button id="toggle-annotations" class="menu-item menu-item-split on" type="button">
+            <span><span class="menu-icon">✎</span>Annotation tools</span><span class="check">✓</span>
+          </button>
 
           <hr class="menu-sep" />
 
@@ -135,6 +138,7 @@
       <div id="scrim" class="scrim"></div>
 
       <aside class="dictionary-panel" aria-label="Dictionary">
+        <div id="dict-resizer" class="dict-resizer" role="separator" aria-orientation="vertical" aria-label="Resize dictionary panel"></div>
         <button id="sheet-grabber" class="sheet-grabber" type="button" aria-label="Resize dictionary"></button>
         <button id="sheet-close" class="sheet-close" type="button" aria-label="Close dictionary">✕</button>
         <div class="dictionary-header">

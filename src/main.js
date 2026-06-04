@@ -36,10 +36,12 @@ const dictionaryContent = document.querySelector("#dictionary-content");
 const searchInput = document.querySelector("#search-input");
 const suggestionsBox = document.querySelector("#suggestions");
 const dictionaryPanel = document.querySelector(".dictionary-panel");
+const dictResizer = document.querySelector("#dict-resizer");
 const sheetGrabber = document.querySelector("#sheet-grabber");
 const scrim = document.querySelector("#scrim");
 const dictButton = document.querySelector("#dict-button");
 const toolsToggle = document.querySelector("#tools-toggle");
+const annotationsToggle = document.querySelector("#toggle-annotations");
 
 const annotationTools = document.querySelector("#annotation-tools");
 const toolSelect = document.querySelector("#tool-select");
@@ -503,96 +505,128 @@ async function lookup(rawWord) {
   }
 }
 
-function renderDictionaryResult(word, rows) {
+function renderDictionaryResult(word, groups) {
   dictionaryContent.replaceChildren();
-  if (rows.length === 0) { showDictionaryMessage("Word not found."); return; }
-
-  const groups = new Map();
-  rows.forEach((row) => {
-    const cls = (row.word_class || "Other").trim() || "Other";
-    if (!groups.has(cls)) groups.set(cls, []);
-    groups.get(cls).push(row);
-  });
-  const classes = [...groups.keys()];
+  if (!groups || groups.length === 0) { showDictionaryMessage("Word not found."); return; }
 
   const head = document.createElement("div");
   head.className = "result-head";
   head.append(createTextElement("h2", word, "result-word"));
   const pron = createTextElement("div", "", "result-pron");
-  head.append(pron);
+  const forms = createTextElement("div", "", "word-forms");
+  head.append(pron, forms);
   dictionaryContent.append(head);
 
   const tabs = document.createElement("div");
   tabs.className = "pos-tabs";
   dictionaryContent.append(tabs);
 
-  const sensesWrap = document.createElement("div");
-  sensesWrap.className = "senses";
-  dictionaryContent.append(sensesWrap);
+  const body = document.createElement("div");
+  body.className = "senses";
+  dictionaryContent.append(body);
 
-  function selectClass(cls) {
-    [...tabs.children].forEach((tab) => tab.classList.toggle("active", tab.dataset.cls === cls));
-    const entries = groups.get(cls);
-    pron.textContent = entries.find((row) => row.pronunciation)?.pronunciation ?? "";
-    sensesWrap.replaceChildren();
-    entries.forEach((row, index) => sensesWrap.append(buildSense(row, index + 1)));
+  function selectGroup(group) {
+    [...tabs.children].forEach((tab) => tab.classList.toggle("active", tab.dataset.cls === group.word_class));
+    pron.textContent = group.pronunciation || "";
+    pron.hidden = !group.pronunciation;
+    forms.textContent = group.forms || "";
+    forms.hidden = !group.forms;
+    body.replaceChildren();
+    group.senses.forEach((sense, index) => body.append(buildSense(sense, index + 1)));
+    if (group.phrases.length) body.append(buildPhrases(group.phrases));
   }
 
-  classes.forEach((cls) => {
+  groups.forEach((group) => {
     const tab = document.createElement("button");
     tab.type = "button";
     tab.className = "pos-tab";
-    tab.dataset.cls = cls;
-    tab.textContent = capitalize(cls);
-    tab.addEventListener("click", () => selectClass(cls));
+    tab.dataset.cls = group.word_class;
+    tab.textContent = capitalize(group.word_class);
+    tab.addEventListener("click", () => selectGroup(group));
     tabs.append(tab);
   });
-  if (classes.length <= 1) tabs.hidden = true;
-  selectClass(classes[0]);
+  if (groups.length <= 1) tabs.hidden = true;
+  selectGroup(groups[0]);
 }
 
-function buildSense(row, number) {
-  const sense = document.createElement("section");
-  sense.className = "sense";
+function buildSense(sense, number) {
+  const section = document.createElement("section");
+  section.className = "sense";
 
   const headRow = document.createElement("div");
   headRow.className = "sense-head";
   headRow.append(createTextElement("span", `${number}.`, "sense-num"));
+  headRow.append(createTextElement("span", sense.translations.join(", "), "sense-translation"));
+  section.append(headRow);
 
-  const translations = String(row.translations ?? "").split("\x1f").map((v) => v.trim()).filter(Boolean);
-  headRow.append(createTextElement("span", translations.join(", "), "sense-translation"));
-  if (row.word_level) headRow.append(createTextElement("span", row.word_level, "sense-level"));
-  sense.append(headRow);
+  if (sense.note) section.append(createTextElement("div", sense.note, "sense-note"));
 
-  const examples = String(row.examples ?? "").split("\n").map((v) => v.trim()).filter(Boolean);
-  if (examples.length > 0) {
-    sense.append(createTextElement("div", "Examples", "examples-label"));
+  if (sense.examples.length > 0) {
+    section.append(createTextElement("div", "Examples", "examples-label"));
     const VISIBLE = 2;
-    examples.forEach((example, index) => {
+    sense.examples.forEach((example, index) => {
       const el = createTextElement("p", example, "example");
       if (index >= VISIBLE) el.hidden = true;
-      sense.append(el);
+      section.append(el);
     });
-    if (examples.length > VISIBLE) {
-      const hiddenCount = examples.length - VISIBLE;
+    if (sense.examples.length > VISIBLE) {
+      const hiddenCount = sense.examples.length - VISIBLE;
       const moreButton = document.createElement("button");
       moreButton.type = "button";
       moreButton.className = "more-examples";
       moreButton.textContent = `More examples (${hiddenCount})`;
       moreButton.addEventListener("click", () => {
-        const collapsed = sense.querySelector(".example[hidden]");
+        const collapsed = section.querySelector(".example[hidden]");
         if (collapsed) {
-          sense.querySelectorAll(".example").forEach((el) => (el.hidden = false));
+          section.querySelectorAll(".example").forEach((el) => (el.hidden = false));
           moreButton.textContent = "Show fewer examples";
         } else {
-          sense.querySelectorAll(".example").forEach((el, index) => (el.hidden = index >= VISIBLE));
+          section.querySelectorAll(".example").forEach((el, index) => (el.hidden = index >= VISIBLE));
           moreButton.textContent = `More examples (${hiddenCount})`;
         }
       });
-      sense.append(moreButton);
+      section.append(moreButton);
     }
   }
-  return sense;
+
+  if (sense.synonyms.length > 0) {
+    const syn = document.createElement("div");
+    syn.className = "sense-syn";
+    syn.append(createTextElement("span", "Synonyms", "syn-label"));
+    syn.append(createTextElement("span", sense.synonyms.join(", "), "syn-list"));
+    section.append(syn);
+  }
+  return section;
+}
+
+function buildPhrases(phrases) {
+  const wrap = document.createElement("section");
+  wrap.className = "phrases";
+
+  const list = document.createElement("div");
+  list.className = "phrase-list";
+  list.hidden = true;
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "phrases-toggle";
+  toggle.textContent = `Phrases (${phrases.length})`;
+  toggle.addEventListener("click", () => {
+    list.hidden = !list.hidden;
+    toggle.classList.toggle("open", !list.hidden);
+  });
+
+  phrases.forEach((phrase) => {
+    const item = document.createElement("div");
+    item.className = "phrase";
+    item.append(createTextElement("span", phrase.term, "phrase-term"));
+    if (phrase.translation) item.append(createTextElement("span", phrase.translation, "phrase-tr"));
+    if (phrase.example) item.append(createTextElement("p", phrase.example, "phrase-ex"));
+    list.append(item);
+  });
+
+  wrap.append(toggle, list);
+  return wrap;
 }
 
 function showDictionaryMessage(message, kind = "normal") {
@@ -699,6 +733,65 @@ toolsToggle.addEventListener("click", (event) => {
   const open = document.body.classList.toggle("tools-open");
   toolsToggle.classList.toggle("active", open);
 });
+
+/* ---------- Annotation tools on/off (menu, persisted) ---------- */
+let annotationsEnabled = localStorage.getItem("nyx-annotations") !== "off";
+function applyAnnotations() {
+  document.body.classList.toggle("annotations-off", !annotationsEnabled);
+  annotationsToggle.classList.toggle("on", annotationsEnabled);
+  if (!annotationsEnabled) {
+    document.body.classList.remove("tools-open");
+    toolsToggle.classList.remove("active");
+    setTool("select"); // drop out of highlight/note mode when hiding the tools
+  }
+}
+annotationsToggle.addEventListener("click", () => {
+  annotationsEnabled = !annotationsEnabled;
+  localStorage.setItem("nyx-annotations", annotationsEnabled ? "on" : "off");
+  applyAnnotations();
+});
+applyAnnotations();
+
+/* ---------- Resizable dictionary panel (desktop) ---------- */
+const DICT_MIN = 280;
+const DICT_MAX = 720;
+function clampDictWidth(value) { return Math.min(Math.max(value, DICT_MIN), DICT_MAX); }
+function applyDictWidth() {
+  const saved = Number(localStorage.getItem("nyx-dict-w"));
+  if (!isMobile() && saved) {
+    document.documentElement.style.setProperty("--dictionary-width", `${clampDictWidth(saved)}px`);
+  } else {
+    document.documentElement.style.removeProperty("--dictionary-width"); // fall back to the stylesheet (incl. mobile 100%)
+  }
+}
+function refitPdf() {
+  if (!currentDocument) return;
+  pdfViewer.currentScaleValue = pdfViewer.currentScaleValue; // refit page-width; numeric scales stay put
+}
+
+let dictDragWidth = null;
+dictResizer.addEventListener("pointerdown", (event) => {
+  if (isMobile()) return;
+  event.preventDefault();
+  dictDragWidth = dictionaryPanel.offsetWidth;
+  dictResizer.setPointerCapture(event.pointerId);
+  document.body.classList.add("dict-resizing");
+});
+dictResizer.addEventListener("pointermove", (event) => {
+  if (dictDragWidth === null) return;
+  dictDragWidth = clampDictWidth(window.innerWidth - event.clientX);
+  document.documentElement.style.setProperty("--dictionary-width", `${dictDragWidth}px`);
+});
+function endDictDrag() {
+  if (dictDragWidth === null) return;
+  localStorage.setItem("nyx-dict-w", String(dictDragWidth));
+  dictDragWidth = null;
+  document.body.classList.remove("dict-resizing");
+  refitPdf();
+}
+dictResizer.addEventListener("pointerup", endDictDrag);
+dictResizer.addEventListener("pointercancel", endDictDrag);
+applyDictWidth();
 
 // Tap the dimmed backdrop, or the ✕ in the sheet header, to close the sheet.
 scrim.addEventListener("click", () => setSheetState("hidden"));
@@ -841,8 +934,9 @@ container.addEventListener("touchend", (event) => {
   if (event.touches.length < 2) pinch = null;
 }, { passive: true });
 
-// Returning to desktop layout: clear any mobile-only state.
+// Switching between mobile/desktop: re-apply the saved panel width (desktop only).
 mobileMedia.addEventListener("change", () => {
+  applyDictWidth();
   if (!mobileMedia.matches) {
     setSheetState("hidden");
     document.body.classList.remove("chrome-hidden", "tools-open", "sheet-full");

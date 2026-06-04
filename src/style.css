@@ -92,6 +92,9 @@ button, label, input { font: inherit; }
 /* Annotation tool strip */
 .annotation-tools { display: flex; align-items: center; gap: 4px; }
 .annotation-tools[hidden] { display: none; }
+/* Annotation tools turned off from the menu: hide the strip (desktop) and pen (mobile) */
+body.annotations-off .annotation-tools,
+body.annotations-off #tools-toggle { display: none; }
 .tool-btn {
   width: 40px; height: 40px; display: grid; place-items: center;
   border: 1px solid transparent; border-radius: 11px;
@@ -185,6 +188,13 @@ html[data-theme="dark"] .pdfViewer .page { box-shadow: none; border: 1px solid v
 
 /* Dictionary panel */
 .dictionary-panel { position: absolute; top: 0; right: 0; bottom: 0; width: var(--dictionary-width); display: flex; flex-direction: column; background: var(--surface-solid); border-left: 1px solid var(--border); }
+/* Drag handle on the panel's left edge to resize its width (desktop) */
+.dict-resizer { position: absolute; top: 0; left: -3px; bottom: 0; width: 7px; z-index: 10; cursor: ew-resize; }
+.dict-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent; transition: background 0.15s ease; }
+.dict-resizer:hover::after { background: var(--accent); }
+body.dict-resizing { cursor: ew-resize; user-select: none; -webkit-user-select: none; }
+body.dict-resizing .dict-resizer::after { background: var(--accent); }
+body.dict-resizing .viewer-container { scroll-behavior: auto; }
 .dictionary-header { padding: 22px 24px 18px; border-bottom: 1px solid var(--border); }
 .dictionary-label { display: block; margin-bottom: 14px; color: var(--text-soft); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; }
 .search-box { position: relative; }
@@ -205,7 +215,10 @@ html[data-theme="dark"] .pdfViewer .page { box-shadow: none; border: 1px solid v
 
 .result-head { margin-bottom: 18px; }
 .result-word { margin: 0 0 4px; font-family: var(--font-display); font-size: 33px; font-weight: 500; letter-spacing: -0.02em; word-break: break-word; }
-.result-pron { color: var(--text-soft); font-size: 14px; min-height: 18px; }
+.result-pron { color: var(--text-soft); font-size: 15px; }
+.result-pron[hidden] { display: none; }
+.word-forms { margin-top: 5px; color: var(--text-soft); font-size: 13px; letter-spacing: 0.01em; }
+.word-forms[hidden] { display: none; }
 .pos-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
 .pos-tab { padding: 7px 15px; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--text-soft); background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s ease; }
 .pos-tab:hover { background: var(--surface-hover); }
@@ -215,12 +228,26 @@ html[data-theme="dark"] .pdfViewer .page { box-shadow: none; border: 1px solid v
 .sense-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 6px; }
 .sense-num { color: var(--text-soft); font-family: var(--font-display); font-size: 16px; font-weight: 600; }
 .sense-translation { color: var(--text); font-family: var(--font-display); font-size: 19px; font-weight: 500; line-height: 1.4; }
-.sense-level { margin-left: 6px; padding: 2px 8px; border-radius: 8px; color: var(--text-soft); background: var(--bg-soft); font-size: 11px; font-weight: 650; }
+.sense-note { margin: 4px 0 0 22px; color: var(--text-soft); font-size: 13px; font-style: italic; line-height: 1.5; }
 .examples-label { margin: 12px 0 6px; color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0.05em; }
 .example { margin: 7px 0; padding-left: 13px; border-left: 2px solid var(--border-strong); color: var(--text-soft); font-size: 13.5px; line-height: 1.55; }
 .example[hidden] { display: none; }
 .more-examples { margin-top: 9px; padding: 0; border: 0; background: transparent; color: var(--accent); font-size: 13px; font-weight: 650; cursor: pointer; }
 .more-examples:hover { text-decoration: underline; }
+.sense-syn { margin-top: 11px; font-size: 13.5px; line-height: 1.55; }
+.syn-label { margin-right: 8px; padding: 2px 8px; border-radius: 7px; color: var(--accent); background: var(--accent-soft); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
+.syn-list { color: var(--text-soft); }
+
+/* Phrases / idioms */
+.phrases { margin-top: 4px; }
+.phrases-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: var(--accent); font-size: 13px; font-weight: 650; cursor: pointer; }
+.phrases-toggle::before { content: "▸"; font-size: 11px; transition: transform 0.15s ease; }
+.phrases-toggle.open::before { transform: rotate(90deg); }
+.phrase-list { margin-top: 12px; display: flex; flex-direction: column; gap: 14px; }
+.phrase-list[hidden] { display: none; }
+.phrase-term { display: block; color: var(--text); font-family: var(--font-display); font-size: 16px; font-weight: 500; }
+.phrase-tr { display: block; margin-top: 2px; color: var(--text-soft); font-size: 13.5px; }
+.phrase-ex { margin: 6px 0 0; padding-left: 13px; border-left: 2px solid var(--border-strong); color: var(--text-soft); font-size: 13px; line-height: 1.5; }
 
 /* Modal */
 .modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; background: rgba(25, 18, 10, 0.45); backdrop-filter: blur(3px); animation: fadeIn 0.15s ease; }
@@ -323,6 +350,7 @@ html[data-theme="dark"] .pdfViewer .page { box-shadow: none; border: 1px solid v
   .swatch { width: 30px; height: 30px; }
 
   /* ----- Dictionary becomes a bottom sheet (hidden / peek / full) ----- */
+  .dict-resizer { display: none; }
   .dictionary-panel {
     position: fixed;
     left: 0; right: 0; bottom: 0; top: auto;
@@ -371,10 +399,14 @@ html[data-theme="dark"] .pdfViewer .page { box-shadow: none; border: 1px solid v
   .dictionary-panel.state-peek .dictionary-header,
   .dictionary-panel.state-peek .pos-tabs,
   .dictionary-panel.state-peek .result-pron,
+  .dictionary-panel.state-peek .word-forms,
   .dictionary-panel.state-peek .sense:not(:first-child),
+  .dictionary-panel.state-peek .sense-note,
   .dictionary-panel.state-peek .examples-label,
   .dictionary-panel.state-peek .example,
-  .dictionary-panel.state-peek .more-examples { display: none; }
+  .dictionary-panel.state-peek .more-examples,
+  .dictionary-panel.state-peek .sense-syn,
+  .dictionary-panel.state-peek .phrases { display: none; }
   .dictionary-panel.state-peek .dictionary-content { overflow: hidden; }
   .dictionary-panel.state-peek .result-word { font-size: 26px; }
   .dictionary-panel.state-peek .sense { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
