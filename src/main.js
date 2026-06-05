@@ -4,7 +4,6 @@ import {
   PDFLinkService,
   PDFViewer,
   PDFFindController,
-  ScrollMode,
   SpreadMode,
 } from "pdfjs-dist/web/pdf_viewer.mjs";
 import "pdfjs-dist/web/pdf_viewer.css";
@@ -31,7 +30,6 @@ const menuStatus = document.querySelector("#menu-status");
 const zoomLabel = document.querySelector("#zoom-label");
 const zoomInButton = document.querySelector("#zoom-in");
 const zoomOutButton = document.querySelector("#zoom-out");
-const fitWidthButton = document.querySelector("#fit-width");
 const themeToggleButton = document.querySelector("#theme-toggle");
 const themeIcon = document.querySelector("#theme-icon");
 const themeLabel = document.querySelector("#theme-label");
@@ -55,11 +53,8 @@ const toolNote = document.querySelector("#tool-note");
 const highlightColors = document.querySelector("#highlight-colors");
 const swatches = [...document.querySelectorAll(".swatch")];
 
-const continuousButton = document.querySelector("#toggle-continuous");
 const spreadButton = document.querySelector("#cycle-spread");
 const spreadState = document.querySelector("#spread-state");
-const rotateLeftButton = document.querySelector("#rotate-left");
-const rotateRightButton = document.querySelector("#rotate-right");
 const fullscreenButton = document.querySelector("#fullscreen");
 const fullscreenLabel = document.querySelector("#fullscreen-label");
 const savePdfButton = document.querySelector("#save-pdf");
@@ -109,7 +104,6 @@ const DEFAULT_HIGHLIGHT = "#fff066";
 const spreadCycle = [SpreadMode.NONE, SpreadMode.ODD, SpreadMode.EVEN];
 const spreadLabels = ["Off", "Odd left", "Even left"];
 let spreadIndex = 0;
-let continuous = true;
 let currentQuery = "";
 
 startTheme();
@@ -168,6 +162,7 @@ async function closeCurrent() {
   if (reflowCleanup) { try { reflowCleanup(); } catch { /* non-fatal */ } reflowCleanup = null; }
   docReader.replaceChildren();
   docReader.hidden = true;
+  document.body.classList.remove("has-annotations"); // a fresh doc starts un-annotated
 }
 
 async function openPdf(file, fromRecent = false) {
@@ -352,7 +347,6 @@ function zoomBy(factor) {
 }
 zoomInButton.addEventListener("click", () => zoomBy(1.1));
 zoomOutButton.addEventListener("click", () => zoomBy(1 / 1.1));
-fitWidthButton.addEventListener("click", () => { if (currentDocument) pdfViewer.currentScaleValue = "page-width"; closeMenu(); });
 
 // Desktop: Ctrl/⌘ + wheel zooms the PDF (also covers trackpad pinch, which
 // the browser reports as a ctrl-wheel event). Plain scrolling is untouched.
@@ -362,26 +356,10 @@ container.addEventListener("wheel", (event) => {
   zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1);
 }, { passive: false });
 
-continuousButton.addEventListener("click", () => {
-  continuous = !continuous;
-  pdfViewer.scrollMode = continuous ? ScrollMode.VERTICAL : ScrollMode.PAGE;
-  continuousButton.classList.toggle("on", continuous);
-});
-
 spreadButton.addEventListener("click", () => {
   spreadIndex = (spreadIndex + 1) % spreadCycle.length;
   pdfViewer.spreadMode = spreadCycle[spreadIndex];
   spreadState.textContent = spreadLabels[spreadIndex];
-});
-
-// Rotate stays inside the open menu so you can tap repeatedly.
-rotateRightButton.addEventListener("click", () => {
-  if (!currentDocument) return;
-  pdfViewer.pagesRotation = (pdfViewer.pagesRotation + 90) % 360;
-});
-rotateLeftButton.addEventListener("click", () => {
-  if (!currentDocument) return;
-  pdfViewer.pagesRotation = (pdfViewer.pagesRotation + 270) % 360;
 });
 
 /* ---------- Annotation tools ---------- */
@@ -421,6 +399,14 @@ function setHighlightColor(color) {
 // color set in the same click is dropped. Re-apply it once the mode is live.
 eventBus.on("annotationeditormodechanged", ({ mode }) => {
   if (mode === AnnotationEditorType.HIGHLIGHT) setHighlightColor(highlightColor);
+});
+
+// "Save annotated copy" only makes sense once something has been drawn — show
+// it when the editor has at least one annotation, hide it when none remain.
+eventBus.on("editingstateschanged", ({ details }) => {
+  if (details && "isEmpty" in details) {
+    document.body.classList.toggle("has-annotations", details.isEmpty === false);
+  }
 });
 
 toolSelect.addEventListener("click", () => setTool("select"));

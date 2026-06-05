@@ -237,6 +237,8 @@ body.annotations-off #tools-toggle { display: none; }
 
 /* Reflow documents have no PDF-specific controls — hide them in the menu. */
 body.reflow-mode .pdf-only { display: none !important; }
+/* "Save annotated copy" only appears once the document actually has annotations. */
+body:not(.has-annotations) #save-pdf { display: none !important; }
 
 .pdfViewer { padding: 30px 0 46px; }
 .pdfViewer .page { margin: 0 auto 26px; border: none; border-radius: 4px; box-shadow: var(--shadow-page); }
