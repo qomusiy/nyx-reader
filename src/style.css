@@ -177,6 +177,67 @@ body.annotations-off #tools-toggle { display: none; }
   font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s ease;
 }
 .welcome-open-button:hover { background: var(--accent-hover); }
+.welcome-formats { margin: 16px auto 0 !important; font-size: 12px; letter-spacing: 0.06em; color: var(--text-soft); }
+
+/* ----- Recent files on the welcome card ----- */
+.recent-files { margin-top: 30px; text-align: left; }
+.recent-files[hidden] { display: none; }
+.recent-label { margin-bottom: 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--text-soft); }
+.recent-list { display: flex; flex-direction: column; gap: 8px; }
+.recent-item { display: flex; align-items: stretch; gap: 6px; }
+.recent-open {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--paper); color: inherit; text-align: left; cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.recent-open:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.recent-badge {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px;
+  border-radius: 10px; background: var(--accent-soft); color: var(--accent);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
+}
+.recent-meta { display: flex; flex-direction: column; min-width: 0; }
+.recent-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent-size { font-size: 12px; color: var(--text-soft); }
+.recent-remove {
+  flex: none; width: 34px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--paper); color: var(--text-soft); cursor: pointer; font-size: 13px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.recent-remove:hover { background: var(--error-bg); color: var(--error); }
+
+/* ----- Reflowable reader (TXT / Markdown / EPUB / DOCX) ----- */
+.doc-reader {
+  max-width: 760px; margin: 0 auto; padding: 46px 28px 80px;
+  color: var(--text); font-size: 18px; line-height: 1.75;
+  font-family: var(--font-ui);
+}
+.doc-reader[hidden] { display: none; }
+.doc-reader p { margin: 0 0 1.05em; }
+.doc-reader h1, .doc-reader h2, .doc-reader h3, .doc-reader h4 {
+  font-family: var(--font-display); font-weight: 600; line-height: 1.25;
+  margin: 1.6em 0 0.6em;
+}
+.doc-reader h1 { font-size: 1.9em; }
+.doc-reader h2 { font-size: 1.5em; }
+.doc-reader h3 { font-size: 1.25em; }
+.doc-reader img { max-width: 100%; height: auto; border-radius: 6px; margin: 1em auto; display: block; }
+.doc-reader a { color: var(--accent); }
+.doc-reader blockquote {
+  margin: 1.2em 0; padding: 0.2em 1em; border-left: 3px solid var(--border-strong);
+  color: var(--text-soft);
+}
+.doc-reader ul, .doc-reader ol { padding-left: 1.4em; margin: 0 0 1.05em; }
+.doc-reader li { margin: 0.3em 0; }
+.doc-reader table { border-collapse: collapse; margin: 1.2em 0; max-width: 100%; }
+.doc-reader td, .doc-reader th { border: 1px solid var(--border); padding: 6px 10px; }
+.doc-reader hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+.epub-chapter + .epub-chapter { margin-top: 2.4em; }
+
+/* Reflow documents have no PDF-specific controls — hide them in the menu. */
+body.reflow-mode .pdf-only { display: none !important; }
+
 .pdfViewer { padding: 30px 0 46px; }
 .pdfViewer .page { margin: 0 auto 26px; border: none; border-radius: 4px; box-shadow: var(--shadow-page); }
 /* Night mode: a glowing shadow around a dark page looks wrong — use a hairline border instead. */
@@ -317,6 +378,9 @@ body.dict-resizing .viewer-container { scroll-behavior: auto; }
   body.chrome-hidden .workspace { top: 0; }
   /* pan-x/pan-y lets the page scroll but reserves pinch for our PDF zoom */
   .viewer-container { right: 0; bottom: 0; touch-action: pan-x pan-y; }
+  /* Reflow text has no custom pinch handler — let the browser zoom it natively */
+  body.reflow-mode .viewer-container { touch-action: auto; }
+  .doc-reader { padding: 24px 18px 70px; font-size: 17px; }
   /* Reading uses tap-to-define; keep text unselectable so no OS callout fires.
      Highlight mode adds .select-mode to turn selection back on. */
   .viewer-container:not(.select-mode) .textLayer { user-select: none; -webkit-user-select: none; }
@@ -343,9 +407,21 @@ body.dict-resizing .viewer-container { scroll-behavior: auto; }
   }
   body.tools-open .annotation-tools { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
   body.chrome-hidden .annotation-tools { opacity: 0; pointer-events: none; transform: translate(-50%, -180%); }
+  .annotation-tools { flex-wrap: nowrap; } /* tools stay on ONE row; colours float below */
   .annotation-tools .topbar-divider { display: none; }
-  /* swatches always drop to their own centered row under the tools */
-  .annotation-tools .highlight-colors { flex-basis: 100%; justify-content: center; padding-left: 0; gap: 12px; }
+  /* Colours become a small popover anchored under the strip, so picking a
+     colour never grows the panel — the tool row keeps a constant height. */
+  .annotation-tools .highlight-colors {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 9px 14px; gap: 16px;
+    background: var(--surface-solid);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-pop);
+  }
   .tool-btn { width: 46px; height: 46px; }
   .swatch { width: 30px; height: 30px; }
 

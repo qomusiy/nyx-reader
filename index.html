@@ -25,40 +25,40 @@
           <div id="menu-status" class="menu-info">No document open</div>
           <hr class="menu-sep" />
 
-          <label class="menu-item" for="file-input"><span class="menu-icon">＋</span>Open PDF</label>
-          <input id="file-input" type="file" accept="application/pdf,.pdf" hidden />
+          <label class="menu-item" for="file-input"><span class="menu-icon">＋</span>Open file</label>
+          <input id="file-input" type="file" accept=".pdf,.txt,.md,.markdown,.epub,.docx,application/pdf,text/plain" hidden />
 
-          <hr class="menu-sep" />
+          <hr class="menu-sep pdf-only" />
 
-          <div class="menu-zoom">
+          <div class="menu-zoom pdf-only">
             <button id="zoom-out" class="zoom-step" type="button" aria-label="Zoom out">−</button>
             <span id="zoom-label" class="zoom-label">Fit width</span>
             <button id="zoom-in" class="zoom-step" type="button" aria-label="Zoom in">+</button>
           </div>
-          <button id="fit-width" class="menu-item" type="button"><span class="menu-icon">⤢</span>Fit width</button>
+          <button id="fit-width" class="menu-item pdf-only" type="button"><span class="menu-icon">⤢</span>Fit width</button>
 
-          <hr class="menu-sep" />
+          <hr class="menu-sep pdf-only" />
 
-          <button id="toggle-continuous" class="menu-item menu-item-split on" type="button">
+          <button id="toggle-continuous" class="menu-item menu-item-split on pdf-only" type="button">
             <span><span class="menu-icon">⧉</span>Continuous</span><span class="check">✓</span>
           </button>
-          <button id="cycle-spread" class="menu-item menu-item-split" type="button">
+          <button id="cycle-spread" class="menu-item menu-item-split pdf-only" type="button">
             <span><span class="menu-icon">▦</span>Two-page view</span><span id="spread-state" class="menu-state">Off</span>
           </button>
-          <div class="menu-rotate">
+          <div class="menu-rotate pdf-only">
             <button id="rotate-left" class="zoom-step" type="button" aria-label="Rotate left">↺</button>
             <span class="zoom-label">Rotate</span>
             <button id="rotate-right" class="zoom-step" type="button" aria-label="Rotate right">↻</button>
           </div>
-          <button id="toggle-annotations" class="menu-item menu-item-split on" type="button">
+          <button id="toggle-annotations" class="menu-item menu-item-split on pdf-only" type="button">
             <span><span class="menu-icon">✎</span>Annotation tools</span><span class="check">✓</span>
           </button>
 
           <hr class="menu-sep" />
 
           <button id="fullscreen" class="menu-item" type="button"><span class="menu-icon">⛶</span><span id="fullscreen-label">Enter fullscreen</span></button>
-          <button id="save-pdf" class="menu-item" type="button"><span class="menu-icon">⤓</span>Save annotated copy</button>
-          <button id="properties" class="menu-item" type="button"><span class="menu-icon">ⓘ</span>Properties</button>
+          <button id="save-pdf" class="menu-item pdf-only" type="button"><span class="menu-icon">⤓</span>Save annotated copy</button>
+          <button id="properties" class="menu-item pdf-only" type="button"><span class="menu-icon">ⓘ</span>Properties</button>
           <button id="shortcuts" class="menu-item" type="button"><span class="menu-icon">⌨</span>Keyboard shortcuts</button>
 
           <hr class="menu-sep" />
@@ -126,13 +126,19 @@
       <div id="viewer-container" class="viewer-container">
         <div id="welcome" class="welcome">
           <div class="welcome-card">
-            <div class="welcome-icon">PDF</div>
+            <div class="welcome-icon">Aa</div>
             <h1>Open a document</h1>
-            <p>Read PDFs beautifully and double-click an English word for its translation.</p>
-            <label class="welcome-open-button" for="file-input">Choose PDF</label>
+            <p>Read PDF, EPUB, Word and text files beautifully — and double-click any English word for its translation.</p>
+            <label class="welcome-open-button" for="file-input">Choose file</label>
+            <p class="welcome-formats">PDF · EPUB · DOCX · TXT · MD</p>
+            <div id="recent-files" class="recent-files" hidden>
+              <div class="recent-label">Recent</div>
+              <div id="recent-list" class="recent-list"></div>
+            </div>
           </div>
         </div>
         <div id="viewer" class="pdfViewer"></div>
+        <div id="doc-reader" class="doc-reader" hidden></div>
       </div>
 
       <div id="scrim" class="scrim"></div>

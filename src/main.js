@@ -11,6 +11,8 @@ import "pdfjs-dist/web/pdf_viewer.css";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "./style.css";
 import { fetchWord, suggestWords } from "./dictionary.js";
+import { saveRecent, listRecent, touchRecent, removeRecent } from "./recent.js";
+import { readText, readDocx, readEpub } from "./readers/reflow.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -20,7 +22,10 @@ const { AnnotationEditorType, AnnotationEditorParamsType } = pdfjsLib;
 const fileInput = document.querySelector("#file-input");
 const container = document.querySelector("#viewer-container");
 const viewer = document.querySelector("#viewer");
+const docReader = document.querySelector("#doc-reader");
 const welcome = document.querySelector("#welcome");
+const recentFiles = document.querySelector("#recent-files");
+const recentList = document.querySelector("#recent-list");
 const docTitle = document.querySelector("#doc-title");
 const menuStatus = document.querySelector("#menu-status");
 const zoomLabel = document.querySelector("#zoom-label");
@@ -97,6 +102,8 @@ let loadingTask = null;
 let currentDocument = null;
 let currentDocName = "";
 let currentFileSize = 0;
+let viewMode = "none"; // "none" | "pdf" | "reflow"
+let reflowCleanup = null; // releases blob URLs etc. for the open reflow doc
 
 const DEFAULT_HIGHLIGHT = "#fff066";
 const spreadCycle = [SpreadMode.NONE, SpreadMode.ODD, SpreadMode.EVEN];
@@ -118,51 +125,210 @@ document.addEventListener("click", (event) => {
 function openMenu() { menu.hidden = false; menuButton.setAttribute("aria-expanded", "true"); }
 function closeMenu() { menu.hidden = true; menuButton.setAttribute("aria-expanded", "false"); }
 
-/* ---------- PDF open ---------- */
+/* ---------- File open (routes by type) ---------- */
 fileInput.addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
-  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-  if (!isPdf) { menuStatus.textContent = "Please choose a PDF file"; return; }
-  closeMenu();
-  await openPdf(file);
+  await openFile(file);
   fileInput.value = "";
 });
 
-async function openPdf(file) {
+const TEXT_EXTENSIONS = [".txt", ".md", ".markdown", ".text"];
+function detectKind(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".pdf") || file.type === "application/pdf") return "pdf";
+  if (name.endsWith(".epub")) return "epub";
+  if (name.endsWith(".docx")) return "docx";
+  if (TEXT_EXTENSIONS.some((ext) => name.endsWith(ext)) || file.type.startsWith("text/")) return "text";
+  return null;
+}
+function mimeFor(kind) {
+  return kind === "pdf" ? "application/pdf"
+    : kind === "epub" ? "application/epub+zip"
+    : kind === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    : "text/plain";
+}
+
+async function openFile(file, { fromRecent = false } = {}) {
+  const kind = detectKind(file);
+  if (!kind) { menuStatus.textContent = "Unsupported file type"; return; }
+  closeMenu();
+  if (kind === "pdf") await openPdf(file, fromRecent);
+  else await openReflow(file, kind, fromRecent);
+}
+
+// Tear down whichever document is currently open before loading a new one.
+async function closeCurrent() {
+  if (currentDocument || loadingTask) {
+    try { pdfViewer.setDocument(null); linkService.setDocument(null); } catch { /* not initialised */ }
+    if (loadingTask) { try { await loadingTask.destroy(); } catch { /* already gone */ } }
+  }
+  loadingTask = null;
+  currentDocument = null;
+  if (reflowCleanup) { try { reflowCleanup(); } catch { /* non-fatal */ } reflowCleanup = null; }
+  docReader.replaceChildren();
+  docReader.hidden = true;
+}
+
+async function openPdf(file, fromRecent = false) {
   docTitle.textContent = file.name;
   menuStatus.textContent = "Opening…";
   closeFind();
 
   try {
-    if (currentDocument) { pdfViewer.setDocument(null); linkService.setDocument(null); }
-    if (loadingTask) { await loadingTask.destroy(); loadingTask = null; currentDocument = null; }
+    await closeCurrent();
 
     const data = await file.arrayBuffer();
+    // pdf.js transfers `data` to its worker (detaching it), so keep a clone for
+    // the recent-files cache before handing the original off.
+    const forCache = data.slice(0);
     loadingTask = pdfjsLib.getDocument({ data, isEvalSupported: false });
     currentDocument = await loadingTask.promise;
     currentDocName = file.name;
     currentFileSize = file.size;
+    viewMode = "pdf";
+    document.body.classList.remove("reflow-mode");
     welcome.hidden = true;
+    viewer.hidden = false;
     pdfViewer.setDocument(currentDocument);
     linkService.setDocument(currentDocument);
 
-    annotationTools.hidden = false;
-    toolsToggle.hidden = false;
+    annotationTools.hidden = !annotationsEnabled;
+    toolsToggle.hidden = !annotationsEnabled;
     findButton.hidden = false;
+
+    if (!fromRecent) saveRecentSafe(file, "pdf", forCache);
+    refreshRecent();
   } catch (error) {
     console.error(error);
-    loadingTask = null;
-    currentDocument = null;
-    welcome.hidden = false;
-    docTitle.textContent = "";
+    failOpen("This PDF could not be opened");
+  }
+}
+
+async function openReflow(file, kind, fromRecent = false) {
+  docTitle.textContent = file.name;
+  menuStatus.textContent = "Opening…";
+  closeFind();
+
+  try {
+    await closeCurrent();
+
+    let html;
+    if (kind === "text") html = await readText(file);
+    else if (kind === "docx") html = await readDocx(file);
+    else { const result = await readEpub(file); html = result.html; reflowCleanup = result.cleanup; }
+
+    docReader.innerHTML = html; // sanitized inside the readers
+    docReader.hidden = false;
+    viewer.hidden = true;
+    welcome.hidden = true;
+    container.scrollTop = 0;
+
+    currentDocName = file.name;
+    currentFileSize = file.size;
+    viewMode = "reflow";
+    document.body.classList.add("reflow-mode");
+    document.body.classList.remove("tools-open");
     annotationTools.hidden = true;
     toolsToggle.hidden = true;
     findButton.hidden = true;
-    document.body.classList.remove("tools-open");
-    menuStatus.textContent = "This PDF could not be opened";
+    menuStatus.textContent = readerLabel(kind);
+
+    if (!fromRecent) saveRecentSafe(file, kind);
+    refreshRecent();
+  } catch (error) {
+    console.error(error);
+    failOpen("This file could not be opened");
   }
 }
+
+function readerLabel(kind) {
+  return kind === "epub" ? "EPUB document"
+    : kind === "docx" ? "Word document"
+    : "Text document";
+}
+
+function failOpen(message) {
+  loadingTask = null;
+  currentDocument = null;
+  reflowCleanup = null;
+  viewMode = "none";
+  welcome.hidden = false;
+  viewer.hidden = false;
+  docReader.hidden = true;
+  docTitle.textContent = "";
+  document.body.classList.remove("reflow-mode", "tools-open");
+  annotationTools.hidden = true;
+  toolsToggle.hidden = true;
+  findButton.hidden = true;
+  menuStatus.textContent = message;
+}
+
+/* ---------- Recent files (IndexedDB, one-click reopen) ---------- */
+async function saveRecentSafe(file, kind, buffer) {
+  try {
+    const bytes = buffer || (await file.arrayBuffer());
+    await saveRecent(file, bytes, kind);
+  } catch (error) {
+    console.warn("Could not cache recent file", error);
+  }
+}
+
+async function refreshRecent() {
+  let items = [];
+  try { items = await listRecent(); } catch { /* ignore */ }
+  recentList.replaceChildren();
+  if (!items.length) { recentFiles.hidden = true; return; }
+  recentFiles.hidden = false;
+
+  items.forEach((record) => {
+    const row = document.createElement("div");
+    row.className = "recent-item";
+
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "recent-open";
+    open.append(createTextElement("span", recentBadge(record.kind), "recent-badge"));
+    const meta = document.createElement("span");
+    meta.className = "recent-meta";
+    meta.append(createTextElement("span", record.name, "recent-name"));
+    meta.append(createTextElement("span", formatBytes(record.size) + (record.data ? "" : " · re-open needed"), "recent-size"));
+    open.append(meta);
+    open.addEventListener("click", () => openRecent(record));
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "recent-remove";
+    remove.setAttribute("aria-label", `Remove ${record.name}`);
+    remove.textContent = "✕";
+    remove.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await removeRecent(record.id);
+      refreshRecent();
+    });
+
+    row.append(open, remove);
+    recentList.append(row);
+  });
+}
+
+function recentBadge(kind) {
+  return kind === "pdf" ? "PDF" : kind === "epub" ? "EPUB" : kind === "docx" ? "DOC" : "TXT";
+}
+
+async function openRecent(record) {
+  if (!record.data) {
+    // File was too large to cache — fall back to the picker.
+    menuStatus.textContent = "This file is too large to remember — please choose it again";
+    fileInput.click();
+    return;
+  }
+  const file = new File([record.data], record.name, { type: mimeFor(record.kind), lastModified: record.lastModified });
+  await touchRecent(record.id);
+  await openFile(file, { fromRecent: true });
+}
+
+refreshRecent();
 
 eventBus.on("pagesinit", () => {
   if (!currentDocument) return;
@@ -431,7 +597,7 @@ function setLookupRange(range) {
 }
 
 container.addEventListener("dblclick", async (event) => {
-  if (!event.target.closest(".textLayer")) return;
+  if (!event.target.closest(".textLayer, .doc-reader")) return;
   const selection = window.getSelection();
   const word = extractLookupWord(selection?.toString() ?? "");
   if (!word) return;
@@ -866,7 +1032,7 @@ function wordAtPoint(x, y) {
     if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); }
   }
   const node = range && range.startContainer;
-  if (!node || node.nodeType !== 3 || !node.parentElement?.closest(".textLayer")) return null;
+  if (!node || node.nodeType !== 3 || !node.parentElement?.closest(".textLayer, .doc-reader")) return null;
   const text = node.textContent || "";
   const isWordChar = (ch) => ch && /[A-Za-z'’-]/.test(ch);
   let start = range.startOffset;
