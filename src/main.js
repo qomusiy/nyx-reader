@@ -10,74 +10,112 @@ import "pdfjs-dist/web/pdf_viewer.css";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "./style.css";
 import { fetchWord, suggestWords } from "./dictionary.js";
-import { saveRecent, listRecent, touchRecent, removeRecent } from "./recent.js";
+import { saveRecent, listRecent, touchRecent, removeRecent, fileId } from "./recent.js";
 import { readText, readDocx, readEpub } from "./readers/reflow.js";
+import { saveVocab, removeVocab, listVocab, hasVocab, getHighlights, setHighlights } from "./store.js";
+import { GUIDE_HTML } from "./welcome.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-
 const { AnnotationEditorType, AnnotationEditorParamsType } = pdfjsLib;
 
 /* ---------- Elements ---------- */
-const fileInput = document.querySelector("#file-input");
-const container = document.querySelector("#viewer-container");
-const viewer = document.querySelector("#viewer");
-const docReader = document.querySelector("#doc-reader");
-const welcome = document.querySelector("#welcome");
-const recentFiles = document.querySelector("#recent-files");
-const recentList = document.querySelector("#recent-list");
-const docTitle = document.querySelector("#doc-title");
-const menuStatus = document.querySelector("#menu-status");
-const zoomLabel = document.querySelector("#zoom-label");
-const zoomInButton = document.querySelector("#zoom-in");
-const zoomOutButton = document.querySelector("#zoom-out");
-const themeToggleButton = document.querySelector("#theme-toggle");
-const themeIcon = document.querySelector("#theme-icon");
-const themeLabel = document.querySelector("#theme-label");
-const menuButton = document.querySelector("#menu-button");
-const menu = document.querySelector("#menu");
-const dictionaryContent = document.querySelector("#dictionary-content");
-const searchInput = document.querySelector("#search-input");
-const suggestionsBox = document.querySelector("#suggestions");
-const dictionaryPanel = document.querySelector(".dictionary-panel");
-const dictResizer = document.querySelector("#dict-resizer");
-const sheetGrabber = document.querySelector("#sheet-grabber");
-const scrim = document.querySelector("#scrim");
-const dictButton = document.querySelector("#dict-button");
-const toolsToggle = document.querySelector("#tools-toggle");
-const annotationsToggle = document.querySelector("#toggle-annotations");
+const $ = (sel) => document.querySelector(sel);
+const app = $("#app");
+const fileInput = $("#file-input");
+const container = $("#viewer-container");
+const viewer = $("#viewer");
+const docReader = $("#doc-reader");
+const library = $("#library");
+const vocabView = $("#vocab");
+const vocabListEl = $("#vocab-list");
+const vocabExport = $("#vocab-export");
+const vocabCount = $("#vocab-count");
+const vocabEmpty = $("#vocab-empty");
+const recentFiles = $("#recent-files");
+const recentList = $("#recent-list");
+const docTitle = $("#doc-title");
+const docSub = $("#doc-sub");
 
-const annotationTools = document.querySelector("#annotation-tools");
-const toolSelect = document.querySelector("#tool-select");
-const toolHighlight = document.querySelector("#tool-highlight");
-const toolNote = document.querySelector("#tool-note");
-const highlightColors = document.querySelector("#highlight-colors");
-const swatches = [...document.querySelectorAll(".swatch")];
+const railNav = [...document.querySelectorAll(".rail [data-nav]")];
+const railToggle = $("#rail-toggle");
+const focusBtn = $("#focus-btn");
+const gearBtn = $("#gear-btn");
+const openBtn = $("#open-btn");
+const libOpen = $("#lib-open");
+const tocBtn = $("#toc-btn");
 
-const spreadButton = document.querySelector("#cycle-spread");
-const spreadState = document.querySelector("#spread-state");
-const fullscreenButton = document.querySelector("#fullscreen");
-const fullscreenLabel = document.querySelector("#fullscreen-label");
-const savePdfButton = document.querySelector("#save-pdf");
-const propertiesButton = document.querySelector("#properties");
-const shortcutsButton = document.querySelector("#shortcuts");
 
-const editUndo = document.querySelector("#edit-undo");
-const editRedo = document.querySelector("#edit-redo");
-const editDelete = document.querySelector("#edit-delete");
-const sheetClose = document.querySelector("#sheet-close");
+const annotationTools = $("#annotation-tools");
+const toolHighlight = $("#tool-highlight");
+const toolNote = $("#tool-note");
+const annotbar = $("#annotbar");
+const highlightColors = $("#highlight-colors");
+const swatches = [...document.querySelectorAll(".swatch[data-color]")];
+const editUndo = $("#edit-undo");
+const editRedo = $("#edit-redo");
+const editDelete = $("#edit-delete");
+const savePdfButton = $("#save-pdf");
 
-const findButton = document.querySelector("#find-button");
-const findBar = document.querySelector("#find-bar");
-const findInput = document.querySelector("#find-input");
-const findCount = document.querySelector("#find-count");
-const findPrev = document.querySelector("#find-prev");
-const findNext = document.querySelector("#find-next");
-const findClose = document.querySelector("#find-close");
+const findButton = $("#find-button");
+const findBar = $("#find-bar");
+const findInput = $("#find-input");
+const findCount = $("#find-count");
+const findPrev = $("#find-prev");
+const findNext = $("#find-next");
+const findClose = $("#find-close");
 
-const modal = document.querySelector("#modal");
-const modalTitle = document.querySelector("#modal-title");
-const modalBody = document.querySelector("#modal-body");
-const modalClose = document.querySelector("#modal-close");
+const dictButton = $("#dict-button");
+const dict = $("#dict");
+const dictX = $("#dict-x");
+const dictionaryContent = $("#dictionary-content");
+const searchInput = $("#search-input");
+const suggestionsBox = $("#suggestions");
+
+const toc = $("#toc");
+const tocList = $("#toc-list");
+const tocX = $("#toc-x");
+
+const scrim = $("#scrim");
+const sheet = $("#sheet");
+const sheetX = $("#sheet-x");
+const themeSeg = $("#theme-seg");
+const fontSel = $("#font-sel");
+const sizeR = $("#size-r");
+const leadR = $("#lead-r");
+const measR = $("#meas-r");
+const sizeVal = $("#size-val");
+const leadVal = $("#lead-val");
+const measVal = $("#meas-val");
+const spreadButton = $("#cycle-spread");
+const spreadState = $("#spread-state");
+const annotationsToggle = $("#toggle-annotations");
+const annotState = $("#annot-state");
+const fullscreenButton = $("#fullscreen");
+const fullscreenLabel = $("#fullscreen-label");
+const propertiesButton = $("#properties");
+const shortcutsButton = $("#shortcuts");
+
+const footPos = $("#foot-pos");
+const footStat = $("#foot-stat");
+const progressFill = $("#progress-fill");
+const prevPage = $("#prev-page");
+const nextPage = $("#next-page");
+
+const pop = $("#pop");
+const popWord = $("#pop-word");
+const popPh = $("#pop-ph");
+const popGloss = $("#pop-gloss");
+const popMore = $("#pop-more");
+const popAudio = $("#pop-audio");
+const popSave = $("#pop-save");
+const triggerSeg = $("#trigger-seg");
+
+const toastEl = $("#toast");
+
+const modal = $("#modal");
+const modalTitle = $("#modal-title");
+const modalBody = $("#modal-body");
+const modalClose = $("#modal-close");
 
 /* ---------- Viewer setup ---------- */
 const eventBus = new EventBus();
@@ -90,6 +128,9 @@ const pdfViewer = new PDFViewer({
   linkService,
   findController,
   annotationEditorMode: AnnotationEditorType.NONE,
+  // Register our swatch palette so the chosen highlight colour is accepted as
+  // the default for new highlights (otherwise pdf.js can fall back to yellow).
+  annotationEditorHighlightColors: "yellow=#fff066,green=#9ce28b,pink=#ffb3c8,blue=#9fd2ff",
 });
 linkService.setViewer(pdfViewer);
 
@@ -98,7 +139,14 @@ let currentDocument = null;
 let currentDocName = "";
 let currentFileSize = 0;
 let viewMode = "none"; // "none" | "pdf" | "reflow"
-let reflowCleanup = null; // releases blob URLs etc. for the open reflow doc
+let reflowCleanup = null;
+let currentTool = "select";
+let currentFileId = "";
+let currentKind = "";
+let reflowCleanHTML = "";   // sanitized doc HTML, before highlight wrapping
+let reflowHighlights = [];  // [{ start, end, color }] absolute char offsets
+let currentLookup = null;   // { word, context, rows } for the active lookup
+let triggerMode = localStorage.getItem("nyx-trigger") === "double" ? "double" : "single";
 
 const DEFAULT_HIGHLIGHT = "#fff066";
 const spreadCycle = [SpreadMode.NONE, SpreadMode.ODD, SpreadMode.EVEN];
@@ -106,18 +154,37 @@ const spreadLabels = ["Off", "Odd left", "Even left"];
 let spreadIndex = 0;
 let currentQuery = "";
 
-startTheme();
+const mobileMedia = window.matchMedia("(max-width: 780px)");
+function isMobile() { return mobileMedia.matches; }
 
-/* ---------- Menu ---------- */
-menuButton.addEventListener("click", (event) => {
-  event.stopPropagation();
-  menu.hidden ? openMenu() : closeMenu();
-});
-document.addEventListener("click", (event) => {
-  if (!menu.hidden && !menu.contains(event.target) && event.target !== menuButton) closeMenu();
-});
-function openMenu() { menu.hidden = false; menuButton.setAttribute("aria-expanded", "true"); }
-function closeMenu() { menu.hidden = true; menuButton.setAttribute("aria-expanded", "false"); }
+/* ---------- View switching (reader / library) ---------- */
+function showView(name) {
+  container.hidden = name !== "read";
+  library.hidden = name !== "lib";
+  vocabView.hidden = name !== "vocab";
+  document.body.dataset.view = name;
+  railNav.forEach((b) => b.classList.toggle("on", b.dataset.nav === name));
+  hidePopover();
+  if (name !== "read") { closeFind(); closeDict(); closeToc(); closeNoteEditor(); }
+}
+railNav.forEach((b) => b.addEventListener("click", () => {
+  closeRail();
+  if (b.dataset.nav === "lib") { refreshRecent(); showView("lib"); }
+  else if (b.dataset.nav === "vocab") { refreshVocab(); showView("vocab"); }
+  else showView("read");
+}));
+
+// The Reader is never blank: with no document open it shows the guide.
+function showGuide() {
+  reflowCleanHTML = "";
+  reflowHighlights = [];
+  currentFileId = "";
+  docReader.innerHTML = GUIDE_HTML;
+  docReader.hidden = false;
+  viewer.hidden = true;
+  docTitle.textContent = "Nyx Reader";
+  docSub.textContent = "Guide";
+}
 
 /* ---------- File open (routes by type) ---------- */
 fileInput.addEventListener("change", async (event) => {
@@ -126,6 +193,8 @@ fileInput.addEventListener("change", async (event) => {
   await openFile(file);
   fileInput.value = "";
 });
+openBtn.addEventListener("click", () => fileInput.click());
+libOpen.addEventListener("click", () => fileInput.click());
 
 const TEXT_EXTENSIONS = [".txt", ".md", ".markdown", ".text"];
 function detectKind(file) {
@@ -145,13 +214,12 @@ function mimeFor(kind) {
 
 async function openFile(file, { fromRecent = false } = {}) {
   const kind = detectKind(file);
-  if (!kind) { menuStatus.textContent = "Unsupported file type"; return; }
-  closeMenu();
+  if (!kind) { toast("Unsupported file type"); return; }
+  closeRail();
   if (kind === "pdf") await openPdf(file, fromRecent);
   else await openReflow(file, kind, fromRecent);
 }
 
-// Tear down whichever document is currently open before loading a new one.
 async function closeCurrent() {
   if (currentDocument || loadingTask) {
     try { pdfViewer.setDocument(null); linkService.setDocument(null); } catch { /* not initialised */ }
@@ -162,34 +230,39 @@ async function closeCurrent() {
   if (reflowCleanup) { try { reflowCleanup(); } catch { /* non-fatal */ } reflowCleanup = null; }
   docReader.replaceChildren();
   docReader.hidden = true;
-  document.body.classList.remove("has-annotations"); // a fresh doc starts un-annotated
+  reflowHighlights = [];
+  reflowCleanHTML = "";
+  currentFileId = "";
+  currentKind = "";
+  document.body.classList.remove("has-annotations");
+  setTool("select");
 }
 
 async function openPdf(file, fromRecent = false) {
   docTitle.textContent = file.name;
-  menuStatus.textContent = "Opening…";
+  docSub.textContent = "Opening…";
   closeFind();
+  showView("read");
 
   try {
     await closeCurrent();
 
     const data = await file.arrayBuffer();
-    // pdf.js transfers `data` to its worker (detaching it), so keep a clone for
-    // the recent-files cache before handing the original off.
-    const forCache = data.slice(0);
+    const forCache = data.slice(0); // pdf.js detaches the buffer; keep a clone to cache
     loadingTask = pdfjsLib.getDocument({ data, isEvalSupported: false });
     currentDocument = await loadingTask.promise;
     currentDocName = file.name;
     currentFileSize = file.size;
+    currentFileId = fileId(file);
+    currentKind = "pdf";
     viewMode = "pdf";
     document.body.classList.remove("reflow-mode");
-    welcome.hidden = true;
     viewer.hidden = false;
     pdfViewer.setDocument(currentDocument);
     linkService.setDocument(currentDocument);
 
+    toolNote.style.display = "";
     annotationTools.hidden = !annotationsEnabled;
-    toolsToggle.hidden = !annotationsEnabled;
     findButton.hidden = false;
 
     if (!fromRecent) saveRecentSafe(file, "pdf", forCache);
@@ -202,8 +275,9 @@ async function openPdf(file, fromRecent = false) {
 
 async function openReflow(file, kind, fromRecent = false) {
   docTitle.textContent = file.name;
-  menuStatus.textContent = "Opening…";
+  docSub.textContent = "Opening…";
   closeFind();
+  showView("read");
 
   try {
     await closeCurrent();
@@ -213,22 +287,29 @@ async function openReflow(file, kind, fromRecent = false) {
     else if (kind === "docx") html = await readDocx(file);
     else { const result = await readEpub(file); html = result.html; reflowCleanup = result.cleanup; }
 
-    docReader.innerHTML = html; // sanitized inside the readers
+    reflowCleanHTML = html; // sanitized inside the readers
+    docReader.innerHTML = html;
     docReader.hidden = false;
     viewer.hidden = true;
-    welcome.hidden = true;
     container.scrollTop = 0;
 
     currentDocName = file.name;
     currentFileSize = file.size;
+    currentFileId = fileId(file);
+    currentKind = kind;
     viewMode = "reflow";
     document.body.classList.add("reflow-mode");
-    document.body.classList.remove("tools-open");
-    annotationTools.hidden = true;
-    toolsToggle.hidden = true;
+    // Highlighting + notes work on reflow text too.
+    toolNote.style.display = "";
+    annotationTools.hidden = !annotationsEnabled;
     findButton.hidden = true;
-    menuStatus.textContent = readerLabel(kind);
+    docSub.textContent = readerLabel(kind);
 
+    reflowHighlights = await getHighlights(currentFileId);
+    renderReflowHighlights();
+    buildTOC();
+    updateProgress();
+    restoreReadingProgress();
     if (!fromRecent) saveRecentSafe(file, kind);
     refreshRecent();
   } catch (error) {
@@ -238,9 +319,7 @@ async function openReflow(file, kind, fromRecent = false) {
 }
 
 function readerLabel(kind) {
-  return kind === "epub" ? "EPUB document"
-    : kind === "docx" ? "Word document"
-    : "Text document";
+  return kind === "epub" ? "EPUB document" : kind === "docx" ? "Word document" : "Text document";
 }
 
 function failOpen(message) {
@@ -248,15 +327,16 @@ function failOpen(message) {
   currentDocument = null;
   reflowCleanup = null;
   viewMode = "none";
-  welcome.hidden = false;
   viewer.hidden = false;
   docReader.hidden = true;
-  docTitle.textContent = "";
-  document.body.classList.remove("reflow-mode", "tools-open");
+  docTitle.textContent = "Nyx Reader";
+  docSub.textContent = "";
+  document.body.classList.remove("reflow-mode");
   annotationTools.hidden = true;
-  toolsToggle.hidden = true;
+  annotbar.hidden = true;
   findButton.hidden = true;
-  menuStatus.textContent = message;
+  showView("lib");
+  toast(message);
 }
 
 /* ---------- Recent files (IndexedDB, one-click reopen) ---------- */
@@ -277,18 +357,33 @@ async function refreshRecent() {
   recentFiles.hidden = false;
 
   items.forEach((record) => {
-    const row = document.createElement("div");
-    row.className = "recent-item";
+    const item = document.createElement("div");
+    item.className = "recent-item";
 
     const open = document.createElement("button");
     open.type = "button";
     open.className = "recent-open";
-    open.append(createTextElement("span", recentBadge(record.kind), "recent-badge"));
-    const meta = document.createElement("span");
-    meta.className = "recent-meta";
-    meta.append(createTextElement("span", record.name, "recent-name"));
-    meta.append(createTextElement("span", formatBytes(record.size) + (record.data ? "" : " · re-open needed"), "recent-size"));
-    open.append(meta);
+
+    const cover = document.createElement("div");
+    cover.className = "recent-cover";
+    cover.style.background = coverColor(record.name);
+    cover.append(createTextElement("span", coverLetter(record.name), "recent-letter"));
+    cover.append(createTextElement("span", recentBadge(record.kind), "recent-kind"));
+    open.append(cover);
+
+    open.append(createTextElement("div", record.name, "recent-name"));
+    open.append(createTextElement("div", `${recentBadge(record.kind)} · ${formatBytes(record.size)}${record.data ? "" : " · re-open needed"}`, "recent-meta-line"));
+
+    const fraction = readingFraction(record.id);
+    const bar = document.createElement("div");
+    bar.className = "recent-progress";
+    const fill = document.createElement("div");
+    fill.className = "recent-progress-fill";
+    fill.style.width = `${Math.round(fraction * 100)}%`;
+    bar.append(fill);
+    open.append(bar);
+    open.append(createTextElement("div", fraction > 0.01 ? `${Math.round(fraction * 100)}% read` : "Not started", "recent-progress-label"));
+
     open.addEventListener("click", () => openRecent(record));
 
     const remove = document.createElement("button");
@@ -299,22 +394,125 @@ async function refreshRecent() {
     remove.addEventListener("click", async (event) => {
       event.stopPropagation();
       await removeRecent(record.id);
+      localStorage.removeItem(`nyx-prog::${record.id}`);
       refreshRecent();
     });
 
-    row.append(open, remove);
-    recentList.append(row);
+    item.append(open, remove);
+    recentList.append(item);
   });
 }
 
 function recentBadge(kind) {
   return kind === "pdf" ? "PDF" : kind === "epub" ? "EPUB" : kind === "docx" ? "DOC" : "TXT";
 }
+function coverLetter(name) { const m = name.match(/[A-Za-z0-9]/); return (m ? m[0] : "·").toUpperCase(); }
+const COVERS = ["#3f7d5e", "#7a5230", "#2f6f7a", "#8a3a52", "#5b5ea6", "#6a7a2f", "#9a5a2c"];
+function coverColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return COVERS[hash % COVERS.length];
+}
+
+/* ---------- Reading progress (per file, localStorage) ---------- */
+function readingFraction(id) { return parseFloat(localStorage.getItem(`nyx-prog::${id}`) || "0") || 0; }
+let progressSaveTimer = null;
+function saveReadingProgress() {
+  if (!currentFileId || viewMode === "none") return;
+  clearTimeout(progressSaveTimer);
+  progressSaveTimer = setTimeout(() => {
+    const max = container.scrollHeight - container.clientHeight;
+    const fraction = max > 0 ? container.scrollTop / max : 0;
+    localStorage.setItem(`nyx-prog::${currentFileId}`, fraction.toFixed(4));
+  }, 500);
+}
+function restoreReadingProgress() {
+  const fraction = readingFraction(currentFileId);
+  if (fraction <= 0.01) return;
+  requestAnimationFrame(() => {
+    const max = container.scrollHeight - container.clientHeight;
+    if (max > 0) container.scrollTop = fraction * max;
+  });
+}
+
+/* ---------- Vocabulary view ---------- */
+async function refreshVocab() {
+  const items = await listVocab();
+  vocabCount.textContent = items.length ? `${items.length} word${items.length > 1 ? "s" : ""}` : "";
+  vocabListEl.replaceChildren();
+  vocabEmpty.hidden = items.length > 0;
+  items.forEach((record) => {
+    const row = document.createElement("div");
+    row.className = "vocab-row";
+    row.append(createTextElement("div", record.word, "vocab-w"));
+    const body = document.createElement("div");
+    body.className = "vocab-body";
+    body.append(createTextElement("div", record.translation || "—", "vocab-tr"));
+    if (record.context) body.append(createTextElement("div", `“${record.context}”`, "vocab-ctx"));
+    if (record.source) body.append(createTextElement("div", record.source, "vocab-src"));
+    row.append(body);
+    const x = document.createElement("button");
+    x.className = "vocab-x";
+    x.setAttribute("aria-label", `Remove ${record.word}`);
+    x.innerHTML = `<svg class="ic" style="width:18px;height:18px"><use href="#i-trash" /></svg>`;
+    x.addEventListener("click", async () => { await removeVocab(record.word); refreshVocab(); reflectSaveState(); });
+    row.append(x);
+    vocabListEl.append(row);
+  });
+}
+vocabExport.addEventListener("click", async () => {
+  const items = await listVocab();
+  if (!items.length) { toast("No words to export"); return; }
+  const esc = (s) => `"${String(s || "").replace(/"/g, '""')}"`;
+  let csv = "Word,Translation,Context,Source\n";
+  items.forEach((r) => { csv += [esc(r.word), esc(r.translation), esc(r.context), esc(r.source)].join(",") + "\n"; });
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "nyx-vocabulary.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`Exported ${items.length} words`);
+});
+
+/* ---------- Lookup trigger setting ---------- */
+function applyTriggerUI() { [...triggerSeg.children].forEach((b) => b.classList.toggle("on", b.dataset.trig === triggerMode)); }
+triggerSeg.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  triggerMode = button.dataset.trig;
+  localStorage.setItem("nyx-trigger", triggerMode);
+  applyTriggerUI();
+});
+
+/* ---------- "Always show popover" + two-page (columns) toggles ---------- */
+let alwaysPopover = localStorage.getItem("nyx-pop-both") === "on";
+const popoverToggle = $("#toggle-popover");
+const popoverState = $("#popover-state");
+function applyPopoverToggle() { popoverState.textContent = alwaysPopover ? "On" : "Off"; popoverToggle.classList.toggle("on", alwaysPopover); }
+popoverToggle.addEventListener("click", () => {
+  alwaysPopover = !alwaysPopover;
+  localStorage.setItem("nyx-pop-both", alwaysPopover ? "on" : "off");
+  applyPopoverToggle();
+});
+
+let columnsOn = localStorage.getItem("nyx-columns") === "on";
+const columnsToggle = $("#toggle-columns");
+const columnsState = $("#columns-state");
+function applyColumns() {
+  document.body.classList.toggle("reflow-columns", columnsOn);
+  columnsState.textContent = columnsOn ? "On" : "Off";
+  columnsToggle.classList.toggle("on", columnsOn);
+}
+columnsToggle.addEventListener("click", () => {
+  columnsOn = !columnsOn;
+  localStorage.setItem("nyx-columns", columnsOn ? "on" : "off");
+  applyColumns();
+});
 
 async function openRecent(record) {
   if (!record.data) {
-    // File was too large to cache — fall back to the picker.
-    menuStatus.textContent = "This file is too large to remember — please choose it again";
+    toast("This file is too large to remember — please choose it again");
     fileInput.click();
     return;
   }
@@ -323,37 +521,43 @@ async function openRecent(record) {
   await openFile(file, { fromRecent: true });
 }
 
-refreshRecent();
-
+/* ---------- pdf.js events ---------- */
 eventBus.on("pagesinit", () => {
   if (!currentDocument) return;
   pdfViewer.currentScaleValue = "page-width";
   const pageWord = currentDocument.numPages === 1 ? "page" : "pages";
-  menuStatus.textContent = `${currentDocument.numPages} ${pageWord}`;
+  docSub.textContent = `${currentDocument.numPages} ${pageWord}`;
   setTool("select");
   setHighlightColor(DEFAULT_HIGHLIGHT);
+  buildTOC();
+  updateProgress();
+  setTimeout(restoreReadingProgress, 250);
 });
+eventBus.on("pagechanging", updateProgress);
 
-eventBus.on("scalechanging", ({ scale, presetValue }) => {
-  zoomLabel.textContent = presetValue === "page-width" ? "Fit width" : `${Math.round(scale * 100)}%`;
-});
-
-/* ---------- Zoom & view modes ---------- */
+/* ---------- Zoom (wheel / keys / pinch) ---------- */
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 6;
 function zoomBy(factor) {
   if (!currentDocument) return;
   pdfViewer.currentScale = Math.min(Math.max(pdfViewer.currentScale * factor, MIN_SCALE), MAX_SCALE);
 }
-zoomInButton.addEventListener("click", () => zoomBy(1.1));
-zoomOutButton.addEventListener("click", () => zoomBy(1 / 1.1));
-
-// Desktop: Ctrl/⌘ + wheel zooms the PDF (also covers trackpad pinch, which
-// the browser reports as a ctrl-wheel event). Plain scrolling is untouched.
+// Reflow "zoom" scales the reading text size instead of the page.
+const READ_MIN = 14, READ_MAX = 30;
+function currentReadingSize() {
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--reading-size")) || 19;
+}
+function setReadingSize(px) {
+  const size = Math.round(Math.min(Math.max(px, READ_MIN), READ_MAX));
+  document.documentElement.style.setProperty("--reading-size", `${size}px`);
+  sizeR.value = String(size);
+  sizeVal.textContent = `${size}px`;
+  localStorage.setItem("nyx-read-size", String(size));
+}
 container.addEventListener("wheel", (event) => {
-  if (!(event.ctrlKey || event.metaKey) || !currentDocument) return;
-  event.preventDefault();
-  zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1);
+  if (!(event.ctrlKey || event.metaKey)) return;
+  if (viewMode === "pdf" && currentDocument) { event.preventDefault(); zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1); }
+  else if (viewMode === "reflow") { event.preventDefault(); setReadingSize(currentReadingSize() + (event.deltaY < 0 ? 1 : -1)); }
 }, { passive: false });
 
 spreadButton.addEventListener("click", () => {
@@ -363,76 +567,184 @@ spreadButton.addEventListener("click", () => {
 });
 
 /* ---------- Annotation tools ---------- */
-let annotationActive = false; // true for highlight or note — taps belong to the editor
+let annotationActive = false;
 function setTool(tool) {
-  toolSelect.classList.toggle("active", tool === "select");
+  currentTool = tool;
   toolHighlight.classList.toggle("active", tool === "highlight");
   toolNote.classList.toggle("active", tool === "note");
-  highlightColors.hidden = tool !== "highlight";
+  annotbar.hidden = tool === "select" || viewMode === "none";
+  highlightColors.style.display = tool === "highlight" ? "" : "none";
+  // redo / delete are pdf-editor actions; hide them while highlighting reflow text
+  editRedo.style.display = viewMode === "reflow" ? "none" : "";
+  editDelete.style.display = viewMode === "reflow" ? "none" : "";
 
-  // Highlighting needs real text selection; reading uses tap-to-define, so we
-  // keep the text layer unselectable except in highlight mode (no OS callout).
   annotationActive = tool !== "select";
-  container.classList.toggle("select-mode", tool === "highlight");
+  // Text selection is needed for highlighting, and for notes on reflow text —
+  // but NOT for PDF notes (free-text boxes are click-placed).
+  container.classList.toggle("select-mode", tool === "highlight" || (tool === "note" && viewMode === "reflow"));
 
-  const mode =
-    tool === "highlight" ? AnnotationEditorType.HIGHLIGHT :
-    tool === "note" ? AnnotationEditorType.FREETEXT :
-    AnnotationEditorType.NONE;
-
-  try { pdfViewer.annotationEditorMode = { mode }; } catch (error) { console.error(error); }
+  if (viewMode === "pdf") {
+    const mode =
+      tool === "highlight" ? AnnotationEditorType.HIGHLIGHT :
+      tool === "note" ? AnnotationEditorType.FREETEXT :
+      AnnotationEditorType.NONE;
+    try { pdfViewer.annotationEditorMode = { mode }; } catch (error) { console.error(error); }
+  }
 }
 
 let highlightColor = DEFAULT_HIGHLIGHT;
 function setHighlightColor(color) {
-  // HIGHLIGHT_COLOR sets the default for new highlights and recolors any
-  // currently-selected one. (HIGHLIGHT_DEFAULT_COLOR doesn't exist in pdfjs 5.)
   highlightColor = color;
   eventBus.dispatch("switchannotationeditorparams", {
-    source: window,
-    type: AnnotationEditorParamsType.HIGHLIGHT_COLOR,
-    value: color,
+    source: window, type: AnnotationEditorParamsType.HIGHLIGHT_COLOR, value: color,
   });
 }
-
-// Switching INTO highlight mode from read mode is async (pdfjs defers it), so a
-// color set in the same click is dropped. Re-apply it once the mode is live.
 eventBus.on("annotationeditormodechanged", ({ mode }) => {
   if (mode === AnnotationEditorType.HIGHLIGHT) setHighlightColor(highlightColor);
 });
-
-// "Save annotated copy" only makes sense once something has been drawn — show
-// it when the editor has at least one annotation, hide it when none remain.
 eventBus.on("editingstateschanged", ({ details }) => {
   if (details && "isEmpty" in details) {
     document.body.classList.toggle("has-annotations", details.isEmpty === false);
   }
 });
 
-toolSelect.addEventListener("click", () => setTool("select"));
-toolHighlight.addEventListener("click", () => setTool("highlight"));
-toolNote.addEventListener("click", () => setTool("note"));
-
+toolHighlight.addEventListener("click", () => setTool(currentTool === "highlight" ? "select" : "highlight"));
+toolNote.addEventListener("click", () => setTool(currentTool === "note" ? "select" : "note"));
 swatches.forEach((swatch) => {
   swatch.addEventListener("click", () => {
-    swatches.forEach((other) => other.classList.toggle("active", other === swatch));
-    setTool("highlight");
+    swatches.forEach((other) => other.classList.toggle("on", other === swatch));
+    if (currentTool !== "highlight") setTool("highlight");
     setHighlightColor(swatch.dataset.color);
   });
 });
 
-/* ---------- Annotation undo / redo / delete ---------- */
 function editingAction(name) {
   if (!currentDocument) return;
   eventBus.dispatch("editingaction", { source: window, name });
 }
-editUndo.addEventListener("click", () => editingAction("undo"));
+editUndo.addEventListener("click", () => {
+  if (viewMode === "reflow") { reflowHighlights.pop(); persistReflowHighlights(); renderReflowHighlights(); }
+  else editingAction("undo");
+});
 editRedo.addEventListener("click", () => editingAction("redo"));
 editDelete.addEventListener("click", () => editingAction("delete"));
 
+/* ---------- Reflow highlights (offset-based, persisted) ---------- */
+function reflowTextNodes() {
+  const walker = document.createTreeWalker(docReader, NodeFilter.SHOW_TEXT, null);
+  const nodes = [];
+  let node;
+  while ((node = walker.nextNode())) nodes.push(node);
+  return nodes;
+}
+// Absolute character offset of a (textNode, offset) within the reader.
+function globalOffset(node, offset) {
+  let total = 0;
+  for (const t of reflowTextNodes()) {
+    if (t === node) return total + offset;
+    total += t.textContent.length;
+  }
+  return total;
+}
+function persistReflowHighlights() {
+  if (currentFileId) setHighlights(currentFileId, reflowHighlights);
+}
+// Rebuild the reader from clean HTML, then wrap every saved highlight range.
+function renderReflowHighlights() {
+  if (!reflowCleanHTML) return;
+  docReader.innerHTML = reflowCleanHTML;
+  for (const hl of [...reflowHighlights].sort((a, b) => a.start - b.start)) wrapReflowRange(hl);
+}
+function wrapReflowRange(hl) {
+  const { start, end, color, note } = hl;
+  let pos = 0;
+  for (const t of reflowTextNodes()) {
+    const len = t.textContent.length;
+    const nodeStart = pos;
+    const nodeEnd = pos + len;
+    pos = nodeEnd;
+    if (nodeEnd <= start || nodeStart >= end) continue;
+    if (t.parentElement?.classList.contains("rf-hl")) continue;
+    const from = Math.max(start, nodeStart) - nodeStart;
+    const to = Math.min(end, nodeEnd) - nodeStart;
+    const range = document.createRange();
+    range.setStart(t, from);
+    range.setEnd(t, to);
+    const span = document.createElement("span");
+    span.className = note != null ? "rf-hl rf-note" : "rf-hl";
+    span.style.background = color;
+    span.dataset.s = String(start);
+    span.dataset.e = String(end);
+    if (note) span.title = note;
+    try { range.surroundContents(span); } catch { /* crosses a boundary — skip this piece */ }
+  }
+}
+function addReflowHighlight(range, withNote = false) {
+  const start = globalOffset(range.startContainer, range.startOffset);
+  const end = globalOffset(range.endContainer, range.endOffset);
+  if (end <= start) return null;
+  const item = { start, end, color: highlightColor };
+  if (withNote) item.note = "";
+  reflowHighlights.push(item);
+  persistReflowHighlights();
+  renderReflowHighlights();
+  return item;
+}
+function findReflowHighlight(span) {
+  const start = Number(span.dataset.s), end = Number(span.dataset.e);
+  return reflowHighlights.find((h) => h.start === start && h.end === end) || null;
+}
+function removeReflowHighlightSpan(span) {
+  const start = Number(span.dataset.s);
+  const end = Number(span.dataset.e);
+  reflowHighlights = reflowHighlights.filter((h) => !(h.start === start && h.end === end));
+  persistReflowHighlights();
+  renderReflowHighlights();
+}
+// Selecting text with Highlight or Note adds an annotation; Note opens an editor.
+container.addEventListener("mouseup", () => {
+  if (viewMode !== "reflow" || (currentTool !== "highlight" && currentTool !== "note")) return;
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) return;
+  const range = selection.getRangeAt(0);
+  if (!docReader.contains(range.commonAncestorContainer)) return;
+  const rect = range.getBoundingClientRect();
+  const item = addReflowHighlight(range, currentTool === "note");
+  selection.removeAllRanges();
+  if (item && currentTool === "note") openNoteEditor(item, rect);
+});
+
+/* ---------- Reflow note editor ---------- */
+const notePop = $("#note-pop");
+const noteText = $("#note-text");
+const noteSave = $("#note-save");
+const noteDel = $("#note-del");
+let editingNote = null;
+function openNoteEditor(item, rect) {
+  editingNote = item;
+  noteText.value = item.note || "";
+  placeFloating(notePop, rect, 264);
+  notePop.classList.add("show");
+  setTimeout(() => noteText.focus(), 40);
+}
+function closeNoteEditor() { notePop.classList.remove("show"); editingNote = null; }
+noteSave.addEventListener("click", () => {
+  if (!editingNote) return;
+  editingNote.note = noteText.value.trim();
+  persistReflowHighlights();
+  renderReflowHighlights();
+  closeNoteEditor();
+});
+noteDel.addEventListener("click", () => {
+  if (!editingNote) return;
+  reflowHighlights = reflowHighlights.filter((h) => h !== editingNote);
+  persistReflowHighlights();
+  renderReflowHighlights();
+  closeNoteEditor();
+});
+
 /* ---------- Save annotated copy ---------- */
 savePdfButton.addEventListener("click", async () => {
-  closeMenu();
   if (!currentDocument) return;
   try {
     const data = await currentDocument.saveDocument();
@@ -443,31 +755,44 @@ savePdfButton.addEventListener("click", async () => {
     link.download = `${currentDocName.replace(/\.pdf$/i, "") || "document"} (annotated).pdf`;
     link.click();
     URL.revokeObjectURL(url);
+    toast("Saved annotated copy");
   } catch (error) {
     console.error(error);
-    menuStatus.textContent = "Could not save the document";
+    toast("Could not save the document");
   }
 });
 
+/* ---------- Settings sheet ---------- */
+function openSheet() { sheet.classList.add("open"); scrim.classList.add("open"); }
+function closeSheet() { sheet.classList.remove("open"); scrim.classList.remove("open"); }
+gearBtn.addEventListener("click", openSheet);
+sheetX.addEventListener("click", closeSheet);
+
 /* ---------- Properties & shortcuts ---------- */
 propertiesButton.addEventListener("click", async () => {
-  closeMenu();
-  if (!currentDocument) return;
-  const { info = {} } = await currentDocument.getMetadata();
-  const rows = [
-    ["Title", info.Title],
-    ["Author", info.Author],
-    ["Subject", info.Subject],
-    ["Keywords", info.Keywords],
-    ["Creator", info.Creator],
-    ["Producer", info.Producer],
-    ["PDF version", info.PDFFormatVersion],
-    ["Pages", String(currentDocument.numPages)],
-    ["File size", formatBytes(currentFileSize)],
-    ["Created", formatPdfDate(info.CreationDate)],
-    ["Modified", formatPdfDate(info.ModDate)],
-  ];
-
+  closeSheet();
+  if (viewMode === "none") { toast("Open a document first"); return; }
+  let rows;
+  if (viewMode === "pdf" && currentDocument) {
+    const { info = {} } = await currentDocument.getMetadata();
+    rows = [
+      ["Title", info.Title], ["Author", info.Author], ["Subject", info.Subject],
+      ["Keywords", info.Keywords], ["Creator", info.Creator], ["Producer", info.Producer],
+      ["PDF version", info.PDFFormatVersion], ["Pages", String(currentDocument.numPages)],
+      ["File size", formatBytes(currentFileSize)], ["Created", formatPdfDate(info.CreationDate)],
+      ["Modified", formatPdfDate(info.ModDate)],
+    ];
+  } else {
+    const text = docReader.textContent || "";
+    const words = (text.trim().match(/\S+/g) || []).length;
+    rows = [
+      ["Name", currentDocName],
+      ["Format", readerLabel(currentKind)],
+      ["File size", formatBytes(currentFileSize)],
+      ["Words", words.toLocaleString()],
+      ["Characters", text.length.toLocaleString()],
+    ];
+  }
   const fragment = document.createDocumentFragment();
   rows.forEach(([key, value]) => {
     if (!value) return;
@@ -481,14 +806,11 @@ propertiesButton.addEventListener("click", async () => {
 });
 
 shortcutsButton.addEventListener("click", () => {
-  closeMenu();
+  closeSheet();
   const shortcuts = [
-    ["Find in document", "Ctrl / ⌘ + F"],
-    ["Close find / dialog", "Esc"],
-    ["Look up a word", "Double-click it"],
-    ["Zoom in / out", "Ctrl / ⌘ + +  /  −"],
-    ["Fit width", "Ctrl / ⌘ + 0"],
-    ["Zoom with mouse", "Ctrl / ⌘ + scroll"],
+    ["Find in document", "Ctrl / ⌘ + F"], ["Focus mode", "F"], ["Close / dialog", "Esc"],
+    ["Look up a word", "Double-click / tap"], ["Zoom in / out", "Ctrl / ⌘ + +  /  −"],
+    ["Fit width", "Ctrl / ⌘ + 0"], ["Previous / next page", "← / →"],
   ];
   const fragment = document.createDocumentFragment();
   shortcuts.forEach(([label, keys]) => {
@@ -501,19 +823,14 @@ shortcutsButton.addEventListener("click", () => {
   openModal("Keyboard shortcuts", fragment);
 });
 
-function openModal(title, bodyNode) {
-  modalTitle.textContent = title;
-  modalBody.replaceChildren(bodyNode);
-  modal.hidden = false;
-}
+function openModal(title, bodyNode) { modalTitle.textContent = title; modalBody.replaceChildren(bodyNode); modal.hidden = false; }
 function closeModal() { modal.hidden = true; modalBody.replaceChildren(); }
 modalClose.addEventListener("click", closeModal);
 modal.addEventListener("click", (event) => { if (event.target === modal) closeModal(); });
 
 /* ---------- Find in document ---------- */
-findButton.addEventListener("click", () => (findBar.hidden ? openFind() : closeFind()));
+findButton.addEventListener("click", () => (findBar.classList.contains("open") ? closeFind() : openFind()));
 findClose.addEventListener("click", closeFind);
-
 findInput.addEventListener("input", () => runFind(findInput.value, ""));
 findInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") { event.preventDefault(); runFind(findInput.value, "again", event.shiftKey); }
@@ -523,24 +840,23 @@ findNext.addEventListener("click", () => runFind(currentQuery || findInput.value
 
 function openFind() {
   if (!currentDocument) return;
-  findBar.hidden = false;
-  findButton.classList.add("active");
+  findBar.classList.add("open");
+  findButton.classList.add("on");
   findInput.focus();
   findInput.select();
 }
 function closeFind() {
-  findBar.hidden = true;
-  findButton.classList.remove("active");
+  findBar.classList.remove("open");
+  findButton.classList.remove("on");
   currentQuery = "";
   findCount.textContent = "";
   eventBus.dispatch("find", { source: window, type: "", query: "", caseSensitive: false, entireWord: false, highlightAll: true, findPrevious: false });
 }
 function runFind(query, type, findPrevious = false) {
   currentQuery = query;
-  if (!query) { findCount.textContent = ""; }
+  if (!query) findCount.textContent = "";
   eventBus.dispatch("find", { source: window, type, query, caseSensitive: false, entireWord: false, highlightAll: true, findPrevious });
 }
-
 eventBus.on("updatefindcontrolstate", ({ matchesCount }) => renderFindCount(matchesCount));
 eventBus.on("updatefindmatchescount", ({ matchesCount }) => renderFindCount(matchesCount));
 function renderFindCount(matchesCount) {
@@ -549,49 +865,85 @@ function renderFindCount(matchesCount) {
   findCount.textContent = `${matchesCount.current} of ${matchesCount.total}`;
 }
 
-/* ---------- Global keys ---------- */
-document.addEventListener("keydown", (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f" && currentDocument) {
-    event.preventDefault();
-    openFind();
-    return;
+/* ---------- Contents (TOC) ---------- */
+async function buildTOC() {
+  tocList.replaceChildren();
+  let hasContents = false;
+  try {
+    if (viewMode === "pdf" && currentDocument) {
+      const outline = await currentDocument.getOutline();
+      if (outline && outline.length) {
+        hasContents = true;
+        outline.forEach((item, index) => tocList.append(makeTocRow(index + 1, item.title, () => {
+          try { linkService.goToDestination(item.dest); } catch { /* ignore */ }
+          closeToc();
+        })));
+      }
+    } else if (viewMode === "reflow") {
+      const heads = [...docReader.querySelectorAll("h1, h2, h3")];
+      if (heads.length > 1) {
+        hasContents = true;
+        heads.forEach((h, index) => makeTocAnchor(h, index));
+        heads.forEach((h, index) => tocList.append(makeTocRow(index + 1, h.textContent.trim() || `Section ${index + 1}`, () => {
+          h.scrollIntoView({ behavior: "smooth", block: "start" });
+          closeToc();
+        })));
+      }
+    }
+  } catch { /* outline not available */ }
+  tocBtn.hidden = !hasContents;
+  if (!hasContents) closeToc();
+}
+function makeTocAnchor(h, index) { if (!h.id) h.id = `nyx-h-${index}`; }
+function makeTocRow(num, title, onClick) {
+  const row = document.createElement("div");
+  row.className = "toc-row";
+  row.append(createTextElement("span", String(num), "n"));
+  const wrap = document.createElement("div");
+  wrap.append(createTextElement("div", title || "Untitled", "t"));
+  row.append(wrap);
+  row.addEventListener("click", onClick);
+  return row;
+}
+function openToc() { toc.classList.add("open"); }
+function closeToc() { toc.classList.remove("open"); }
+tocBtn.addEventListener("click", () => (toc.classList.contains("open") ? closeToc() : openToc()));
+tocX.addEventListener("click", closeToc);
+
+/* ---------- Footer progress + paging ---------- */
+function updateProgress() {
+  const max = container.scrollHeight - container.clientHeight;
+  const pct = max > 0 ? Math.round((container.scrollTop / max) * 100) : 0;
+  progressFill.style.width = `${pct}%`;
+  if (viewMode === "pdf" && currentDocument) {
+    footPos.textContent = `${pdfViewer.currentPageNumber} / ${currentDocument.numPages}`;
+    prevPage.disabled = pdfViewer.currentPageNumber <= 1;
+    nextPage.disabled = pdfViewer.currentPageNumber >= currentDocument.numPages;
+  } else {
+    footPos.textContent = "";
+    prevPage.disabled = nextPage.disabled = viewMode === "none";
   }
-  if ((event.ctrlKey || event.metaKey) && currentDocument) {
-    if (event.key === "=" || event.key === "+") { event.preventDefault(); zoomBy(1.1); return; }
-    if (event.key === "-") { event.preventDefault(); zoomBy(1 / 1.1); return; }
-    if (event.key === "0") { event.preventDefault(); pdfViewer.currentScaleValue = "page-width"; return; }
-  }
-  if (event.key === "Escape") {
-    if (!modal.hidden) { closeModal(); return; }
-    if (!findBar.hidden) { closeFind(); return; }
-    closeMenu();
-  }
+  footStat.textContent = viewMode === "none" ? "" : `${pct}%`;
+  saveReadingProgress();
+}
+container.addEventListener("scroll", updateProgress);
+prevPage.addEventListener("click", () => {
+  if (viewMode === "pdf" && currentDocument) { if (pdfViewer.currentPageNumber > 1) pdfViewer.currentPageNumber -= 1; }
+  else container.scrollBy({ top: -container.clientHeight * 0.9, behavior: "smooth" });
+});
+nextPage.addEventListener("click", () => {
+  if (viewMode === "pdf" && currentDocument) { if (pdfViewer.currentPageNumber < currentDocument.numPages) pdfViewer.currentPageNumber += 1; }
+  else container.scrollBy({ top: container.clientHeight * 0.9, behavior: "smooth" });
 });
 
 /* ---------- Dictionary lookup ---------- */
-// Tint the looked-up word on the page (CSS Custom Highlight API) so it's clear
-// which word the dictionary is showing. Passing null clears it.
 let lookupHighlight = null;
 function setLookupRange(range) {
   if (typeof Highlight === "undefined" || !CSS.highlights) return;
-  if (!lookupHighlight) {
-    lookupHighlight = new Highlight();
-    CSS.highlights.set("lookup-word", lookupHighlight);
-  }
+  if (!lookupHighlight) { lookupHighlight = new Highlight(); CSS.highlights.set("lookup-word", lookupHighlight); }
   lookupHighlight.clear();
   if (range) lookupHighlight.add(range);
 }
-
-container.addEventListener("dblclick", async (event) => {
-  if (!event.target.closest(".textLayer, .doc-reader")) return;
-  const selection = window.getSelection();
-  const word = extractLookupWord(selection?.toString() ?? "");
-  if (!word) return;
-  if (selection?.rangeCount) setLookupRange(selection.getRangeAt(0).cloneRange());
-  searchInput.value = word;
-  hideSuggestions();
-  await lookup(word);
-});
 
 function extractLookupWord(text) {
   const cleaned = text.replaceAll("’", "'").trim();
@@ -599,6 +951,64 @@ function extractLookupWord(text) {
   return match ? match[0].toLowerCase() : "";
 }
 
+// The sentence a looked-up word appeared in — saved with the word in vocab.
+function sentenceAround(node, offset) {
+  if (!node || node.nodeType !== 3) return "";
+  const text = node.textContent || "";
+  let s = offset, e = offset;
+  while (s > 0 && !/[.!?]/.test(text[s - 1])) s--;
+  while (e < text.length && !/[.!?]/.test(text[e])) e++;
+  return text.slice(s, e + 1).trim();
+}
+
+// Single click: remove a reflow highlight (highlight mode), or look up the word
+// under the pointer when the lookup trigger is "single".
+container.addEventListener("click", async (event) => {
+  if (viewMode === "reflow" && currentTool === "highlight") {
+    const span = event.target.closest(".rf-hl");
+    const selection = window.getSelection();
+    if (span && (!selection || selection.isCollapsed)) removeReflowHighlightSpan(span);
+    return;
+  }
+  // In read mode, clicking a noted highlight opens its note.
+  if (viewMode === "reflow" && currentTool === "select") {
+    const noteSpan = event.target.closest(".rf-hl.rf-note");
+    if (noteSpan) { const item = findReflowHighlight(noteSpan); if (item) { openNoteEditor(item, noteSpan.getBoundingClientRect()); return; } }
+  }
+  if (triggerMode !== "single" || event.detail > 1 || annotationActive) return;
+  if (!event.target.closest(".textLayer, .doc-reader")) return;
+  const selection = window.getSelection();
+  if (selection && !selection.isCollapsed && selection.toString().trim().split(/\s+/).length > 1) return;
+  const hit = wordAtPoint(event.clientX, event.clientY);
+  if (!hit) return;
+  setLookupRange(hit.range);
+  await lookup(hit.word, hit.range.getBoundingClientRect(), sentenceAround(hit.range.startContainer, hit.range.startOffset));
+});
+
+// Double click: look up when the trigger is "double".
+container.addEventListener("dblclick", async (event) => {
+  if (triggerMode !== "double" || annotationActive) return;
+  if (!event.target.closest(".textLayer, .doc-reader")) return;
+  const selection = window.getSelection();
+  const word = extractLookupWord(selection?.toString() ?? "");
+  if (!word) return;
+  let rect = null, context = "";
+  if (selection?.rangeCount) {
+    const range = selection.getRangeAt(0);
+    setLookupRange(range.cloneRange());
+    rect = range.getBoundingClientRect();
+    context = sentenceAround(range.startContainer, range.startOffset);
+  }
+  await lookup(word, rect, context);
+});
+
+/* Dictionary panel toggle */
+function openDict() { dict.classList.add("open"); }
+function closeDict() { dict.classList.remove("open"); }
+dictButton.addEventListener("click", () => (dict.classList.contains("open") ? closeDict() : (openDict(), setTimeout(() => searchInput.focus(), 60))));
+dictX.addEventListener("click", closeDict);
+
+/* Search box (inside the dictionary drawer) */
 let suggestTimer = null;
 searchInput.addEventListener("input", () => {
   const prefix = searchInput.value.trim().toLowerCase();
@@ -609,9 +1019,7 @@ searchInput.addEventListener("input", () => {
       const words = await suggestWords(prefix);
       if (searchInput.value.trim().toLowerCase() !== prefix) return;
       renderSuggestions(words);
-    } catch (error) {
-      hideSuggestions();
-    }
+    } catch { hideSuggestions(); }
   }, 200);
 });
 searchInput.addEventListener("keydown", (event) => {
@@ -641,22 +1049,107 @@ function renderSuggestions(words) {
 }
 function hideSuggestions() { suggestionsBox.hidden = true; suggestionsBox.replaceChildren(); }
 
-async function lookup(rawWord) {
+async function lookup(rawWord, anchorRect = null, context = "") {
   const word = (rawWord || "").trim();
   if (!word) return;
-  // On mobile, a fresh lookup (e.g. from tapping a word) opens the compact peek.
-  // If the sheet is already open (user searched), leave its state alone.
-  if (isMobile() && sheetState === "hidden") setSheetState("peek");
+  searchInput.value = word;
+  hideSuggestions();
+  currentLookup = { word: word.toLowerCase(), context, rows: null };
+  // When the full panel is already open, just update it (no duplicate popover) —
+  // unless the user has turned on "Always show popover".
+  const drawerOpen = dict.classList.contains("open");
+  const usePopover = !!anchorRect && (alwaysPopover || !drawerOpen);
   showDictionaryLoading();
+  if (usePopover) showPopoverLoading(word, anchorRect);
+  else if (!drawerOpen) openDict();
   try {
     const rows = await fetchWord(word);
+    currentLookup.rows = rows;
     renderDictionaryResult(word.toLowerCase(), rows);
+    if (usePopover) fillPopover(word, rows, anchorRect);
+    reflectSaveState();
   } catch (error) {
     console.error(error);
     showDictionaryMessage("Could not reach the dictionary. Check your connection and try again.", "error");
+    if (usePopover) { popGloss.textContent = "Could not reach the dictionary."; popMore.hidden = true; }
   }
 }
 
+/* ---------- Saving words (vocabulary) ---------- */
+function buildVocabRecord() {
+  const rows = currentLookup?.rows;
+  const first = rows && rows[0];
+  const sense = first?.senses?.[0];
+  return {
+    word: currentLookup.word,
+    translation: sense ? sense.translations.join(", ") : "",
+    pronunciation: first?.pronunciation || "",
+    wordClass: first?.word_class || "",
+    context: currentLookup.context || "",
+    source: currentDocName || "",
+    addedAt: Date.now(),
+  };
+}
+async function toggleSaveCurrent() {
+  if (!currentLookup) return;
+  const word = currentLookup.word;
+  if (await hasVocab(word)) { await removeVocab(word); toast(`Removed “${word}”`); }
+  else { await saveVocab(buildVocabRecord()); toast(`Saved “${word}”`); }
+  reflectSaveState();
+}
+async function reflectSaveState() {
+  if (!currentLookup) return;
+  const saved = await hasVocab(currentLookup.word);
+  popSave.classList.toggle("on", saved);
+  popSave.querySelector("use").setAttribute("href", saved ? "#i-check" : "#i-bookmark");
+  const chip = document.querySelector("#dict-save");
+  if (chip) {
+    chip.classList.toggle("on", saved);
+    chip.querySelector("use").setAttribute("href", saved ? "#i-check" : "#i-bookmark");
+    chip.querySelector("span").textContent = saved ? "Saved" : "Save";
+  }
+}
+popSave.addEventListener("click", toggleSaveCurrent);
+
+/* ---------- Word popover ---------- */
+function placeFloating(el, rect, width = 256) {
+  const main = document.querySelector(".main").getBoundingClientRect();
+  let left = rect.left - main.left + rect.width / 2 - width / 2;
+  left = Math.max(12, Math.min(left, main.width - width - 12));
+  let top = rect.bottom - main.top + 8;
+  if (top > main.height - 180) top = Math.max(12, rect.top - main.top - 170);
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+}
+function placePopover(rect) { placeFloating(pop, rect, 256); }
+function showPopoverLoading(word, rect) {
+  popWord.textContent = word;
+  popPh.textContent = "";
+  popGloss.textContent = "Searching…";
+  popMore.hidden = true;
+  placePopover(rect);
+  pop.classList.add("show");
+}
+function fillPopover(word, rows, rect) {
+  const first = rows && rows[0];
+  popWord.textContent = word;
+  popPh.textContent = first?.pronunciation || (first?.word_class ? `· ${first.word_class}` : "");
+  const sense = first?.senses?.[0];
+  popGloss.textContent = sense ? sense.translations.join(", ") : "No entry found.";
+  popMore.hidden = !rows || rows.length === 0;
+  placePopover(rect);
+  pop.classList.add("show");
+}
+function hidePopover() { pop.classList.remove("show"); }
+popMore.addEventListener("click", () => { openDict(); hidePopover(); });
+popAudio.addEventListener("click", () => speak(popWord.textContent));
+container.addEventListener("scroll", () => { hidePopover(); closeNoteEditor(); });
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("#pop, .w, .textLayer, .doc-reader")) hidePopover();
+  if (!event.target.closest("#note-pop, .rf-note")) closeNoteEditor();
+});
+
+/* ---------- Dictionary rendering (rich API result) ---------- */
 function renderDictionaryResult(word, groups) {
   dictionaryContent.replaceChildren();
   if (!groups || groups.length === 0) { showDictionaryMessage("Word not found."); return; }
@@ -668,6 +1161,22 @@ function renderDictionaryResult(word, groups) {
   const forms = createTextElement("div", "", "word-forms");
   head.append(pron, forms);
   dictionaryContent.append(head);
+
+  const actions = document.createElement("div");
+  actions.className = "dict-actions";
+  const saveChip = document.createElement("button");
+  saveChip.type = "button";
+  saveChip.id = "dict-save";
+  saveChip.className = "dict-chip";
+  saveChip.innerHTML = `<svg class="ic"><use href="#i-bookmark" /></svg><span>Save</span>`;
+  saveChip.addEventListener("click", toggleSaveCurrent);
+  const listenChip = document.createElement("button");
+  listenChip.type = "button";
+  listenChip.className = "dict-chip";
+  listenChip.innerHTML = `<svg class="ic"><use href="#i-volume" /></svg><span>Listen</span>`;
+  listenChip.addEventListener("click", () => speak(word));
+  actions.append(saveChip, listenChip);
+  dictionaryContent.append(actions);
 
   const tabs = document.createElement("div");
   tabs.className = "pos-tabs";
@@ -704,13 +1213,11 @@ function renderDictionaryResult(word, groups) {
 function buildSense(sense, number) {
   const section = document.createElement("section");
   section.className = "sense";
-
   const headRow = document.createElement("div");
   headRow.className = "sense-head";
   headRow.append(createTextElement("span", `${number}.`, "sense-num"));
   headRow.append(createTextElement("span", sense.translations.join(", "), "sense-translation"));
   section.append(headRow);
-
   if (sense.note) section.append(createTextElement("div", sense.note, "sense-note"));
 
   if (sense.examples.length > 0) {
@@ -754,20 +1261,14 @@ function buildSense(sense, number) {
 function buildPhrases(phrases) {
   const wrap = document.createElement("section");
   wrap.className = "phrases";
-
   const list = document.createElement("div");
   list.className = "phrase-list";
   list.hidden = true;
-
   const toggle = document.createElement("button");
   toggle.type = "button";
   toggle.className = "phrases-toggle";
   toggle.textContent = `Phrases (${phrases.length})`;
-  toggle.addEventListener("click", () => {
-    list.hidden = !list.hidden;
-    toggle.classList.toggle("open", !list.hidden);
-  });
-
+  toggle.addEventListener("click", () => { list.hidden = !list.hidden; toggle.classList.toggle("open", !list.hidden); });
   phrases.forEach((phrase) => {
     const item = document.createElement("div");
     item.className = "phrase";
@@ -776,7 +1277,6 @@ function buildPhrases(phrases) {
     if (phrase.example) item.append(createTextElement("p", phrase.example, "phrase-ex"));
     list.append(item);
   });
-
   wrap.append(toggle, list);
   return wrap;
 }
@@ -785,7 +1285,6 @@ function showDictionaryMessage(message, kind = "normal") {
   dictionaryContent.replaceChildren();
   dictionaryContent.append(createTextElement("div", message, `dictionary-message ${kind}`));
 }
-
 function showDictionaryLoading() {
   dictionaryContent.replaceChildren();
   const wrap = document.createElement("div");
@@ -821,199 +1320,142 @@ function formatPdfDate(value) {
   return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-/* ---------- Theme ---------- */
+/* ---------- Theme (paper / sepia / night) ---------- */
+const THEMES = ["paper", "sepia", "night"];
 function startTheme() {
   const saved = localStorage.getItem("nyx-theme");
-  if (saved === "light" || saved === "dark") { setTheme(saved); return; }
-  setTheme(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  let theme = THEMES.includes(saved) ? saved
+    : saved === "dark" ? "night"
+    : saved === "light" ? "paper"
+    : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "paper");
+  setTheme(theme);
 }
 function setTheme(theme) {
-  const isDark = theme === "dark";
   document.documentElement.dataset.theme = theme;
-  themeIcon.textContent = isDark ? "☀" : "☾";
-  themeLabel.textContent = isDark ? "Day mode" : "Night mode";
-  // One switch: night mode darkens the UI *and* the pages, day restores both.
-  container.classList.toggle("invert-pages", isDark);
   localStorage.setItem("nyx-theme", theme);
+  [...themeSeg.children].forEach((b) => b.classList.toggle("on", b.dataset.theme === theme));
 }
-themeToggleButton.addEventListener("click", () => {
-  setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+themeSeg.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (button) setTheme(button.dataset.theme);
 });
 
-/* ---------- Fullscreen ---------- */
-fullscreenButton.addEventListener("click", () => {
-  closeMenu();
-  if (document.fullscreenElement) {
-    document.exitFullscreen();
-  } else {
-    document.documentElement.requestFullscreen?.().catch((error) => console.error(error));
-  }
-});
-document.addEventListener("fullscreenchange", () => {
-  fullscreenLabel.textContent = document.fullscreenElement ? "Exit fullscreen" : "Enter fullscreen";
-});
-
-/* ---------- Mobile bottom sheet ---------- */
-const mobileMedia = window.matchMedia("(max-width: 920px)");
-const PEEK_HIDDEN_RATIO = 0.62; // must match `.state-peek` translateY(62%) in CSS
-let sheetState = "hidden"; // "hidden" | "peek" | "full"
-
-function isMobile() { return mobileMedia.matches; }
-
-function setSheetState(state) {
-  sheetState = state;
-  dictionaryPanel.style.transform = "";
-  dictionaryPanel.classList.toggle("state-peek", state === "peek");
-  dictionaryPanel.classList.toggle("state-full", state === "full");
-  document.body.classList.toggle("sheet-full", state === "full");
+/* ---------- Reading typography (text formats) ---------- */
+function startTypography() {
+  const root = document.documentElement.style;
+  const font = localStorage.getItem("nyx-read-font");
+  const size = localStorage.getItem("nyx-read-size");
+  const lead = localStorage.getItem("nyx-read-lead");
+  const meas = localStorage.getItem("nyx-read-meas");
+  if (font) { root.setProperty("--reading-font", font); fontSel.value = font; }
+  if (size) { root.setProperty("--reading-size", `${size}px`); sizeR.value = size; sizeVal.textContent = `${size}px`; }
+  if (lead) { root.setProperty("--reading-leading", lead); leadR.value = lead; leadVal.textContent = lead; }
+  if (meas) { root.setProperty("--reading-measure", `${meas}rem`); measR.value = meas; measVal.textContent = `${meas}rem`; }
 }
-
-// Dictionary button: toggle the sheet open (full) / closed.
-dictButton.addEventListener("click", () => {
-  if (!isMobile()) return;
-  if (sheetState === "full") {
-    setSheetState("hidden");
-  } else {
-    setSheetState("full");
-    setTimeout(() => searchInput.focus(), 60);
-  }
+fontSel.addEventListener("change", function () {
+  document.documentElement.style.setProperty("--reading-font", this.value);
+  localStorage.setItem("nyx-read-font", this.value);
+});
+sizeR.addEventListener("input", function () {
+  document.documentElement.style.setProperty("--reading-size", `${this.value}px`);
+  sizeVal.textContent = `${this.value}px`; localStorage.setItem("nyx-read-size", this.value); updateProgress();
+});
+leadR.addEventListener("input", function () {
+  const v = (+this.value).toFixed(2);
+  document.documentElement.style.setProperty("--reading-leading", v);
+  leadVal.textContent = v; localStorage.setItem("nyx-read-lead", v); updateProgress();
+});
+measR.addEventListener("input", function () {
+  document.documentElement.style.setProperty("--reading-measure", `${this.value}rem`);
+  measVal.textContent = `${this.value}rem`; localStorage.setItem("nyx-read-meas", this.value); updateProgress();
 });
 
-// Pen button: reveal / hide the annotation tool strip.
-toolsToggle.addEventListener("click", (event) => {
-  event.stopPropagation();
-  const open = document.body.classList.toggle("tools-open");
-  toolsToggle.classList.toggle("active", open);
-});
-
-/* ---------- Annotation tools on/off (menu, persisted) ---------- */
+/* ---------- Annotation tools on/off ---------- */
 let annotationsEnabled = localStorage.getItem("nyx-annotations") !== "off";
 function applyAnnotations() {
-  document.body.classList.toggle("annotations-off", !annotationsEnabled);
+  annotState.textContent = annotationsEnabled ? "On" : "Off";
   annotationsToggle.classList.toggle("on", annotationsEnabled);
-  if (!annotationsEnabled) {
-    document.body.classList.remove("tools-open");
-    toolsToggle.classList.remove("active");
-    setTool("select"); // drop out of highlight/note mode when hiding the tools
-  }
+  if (viewMode === "pdf") annotationTools.hidden = !annotationsEnabled;
+  if (!annotationsEnabled) setTool("select");
 }
 annotationsToggle.addEventListener("click", () => {
   annotationsEnabled = !annotationsEnabled;
   localStorage.setItem("nyx-annotations", annotationsEnabled ? "on" : "off");
   applyAnnotations();
 });
-applyAnnotations();
 
-/* ---------- Resizable dictionary panel (desktop) ---------- */
-const DICT_MIN = 280;
-const DICT_MAX = 720;
-function clampDictWidth(value) { return Math.min(Math.max(value, DICT_MIN), DICT_MAX); }
-function applyDictWidth() {
-  const saved = Number(localStorage.getItem("nyx-dict-w"));
-  if (!isMobile() && saved) {
-    document.documentElement.style.setProperty("--dictionary-width", `${clampDictWidth(saved)}px`);
-  } else {
-    document.documentElement.style.removeProperty("--dictionary-width"); // fall back to the stylesheet (incl. mobile 100%)
+/* ---------- Focus mode + rail (mobile) ---------- */
+focusBtn.addEventListener("click", toggleFocus);
+function toggleFocus() {
+  const on = app.classList.toggle("focus");
+  focusBtn.classList.toggle("on", on);
+  hidePopover();
+}
+function openRail() { app.classList.add("rail-open"); scrim.classList.add("open"); }
+function closeRail() { app.classList.remove("rail-open"); if (!sheet.classList.contains("open")) scrim.classList.remove("open"); }
+railToggle.addEventListener("click", () => (app.classList.contains("rail-open") ? closeRail() : openRail()));
+scrim.addEventListener("click", () => { closeSheet(); closeRail(); });
+
+/* ---------- Fullscreen ---------- */
+fullscreenButton.addEventListener("click", () => {
+  closeSheet();
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.().catch((error) => console.error(error));
+});
+document.addEventListener("fullscreenchange", () => {
+  fullscreenLabel.textContent = document.fullscreenElement ? "Exit fullscreen" : "Enter fullscreen";
+});
+
+/* ---------- Speech + toast ---------- */
+function speak(text) {
+  try {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "en-GB"; utter.rate = 0.92;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utter);
+  } catch { toast("Audio unavailable"); }
+}
+let toastTimer = null;
+function toast(message) {
+  toastEl.textContent = message;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1800);
+}
+
+/* ---------- Global keys ---------- */
+document.addEventListener("keydown", (event) => {
+  const typing = event.target.tagName === "INPUT" || event.target.tagName === "SELECT" || event.target.isContentEditable;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f" && currentDocument) { event.preventDefault(); openFind(); return; }
+  if ((event.ctrlKey || event.metaKey) && currentDocument) {
+    if (event.key === "=" || event.key === "+") { event.preventDefault(); zoomBy(1.1); return; }
+    if (event.key === "-") { event.preventDefault(); zoomBy(1 / 1.1); return; }
+    if (event.key === "0") { event.preventDefault(); pdfViewer.currentScaleValue = "page-width"; return; }
   }
-}
-function refitPdf() {
-  if (!currentDocument) return;
-  pdfViewer.currentScaleValue = pdfViewer.currentScaleValue; // refit page-width; numeric scales stay put
-}
-
-let dictDragWidth = null;
-dictResizer.addEventListener("pointerdown", (event) => {
-  if (isMobile()) return;
-  event.preventDefault();
-  dictDragWidth = dictionaryPanel.offsetWidth;
-  dictResizer.setPointerCapture(event.pointerId);
-  document.body.classList.add("dict-resizing");
-});
-dictResizer.addEventListener("pointermove", (event) => {
-  if (dictDragWidth === null) return;
-  dictDragWidth = clampDictWidth(window.innerWidth - event.clientX);
-  document.documentElement.style.setProperty("--dictionary-width", `${dictDragWidth}px`);
-});
-function endDictDrag() {
-  if (dictDragWidth === null) return;
-  localStorage.setItem("nyx-dict-w", String(dictDragWidth));
-  dictDragWidth = null;
-  document.body.classList.remove("dict-resizing");
-  refitPdf();
-}
-dictResizer.addEventListener("pointerup", endDictDrag);
-dictResizer.addEventListener("pointercancel", endDictDrag);
-applyDictWidth();
-
-// Tap the dimmed backdrop, or the ✕ in the sheet header, to close the sheet.
-scrim.addEventListener("click", () => setSheetState("hidden"));
-sheetClose.addEventListener("click", () => setSheetState("hidden"));
-
-// Tap the compact peek to expand it to full detail.
-dictionaryContent.addEventListener("click", (event) => {
-  if (isMobile() && sheetState === "peek" && !event.target.closest("button, a")) {
-    setSheetState("full");
-  }
-});
-
-/* ----- Grabber: tap to toggle, drag to snap between states ----- */
-function stateTranslate(state, height) {
-  if (state === "full") return 0;
-  if (state === "peek") return height * PEEK_HIDDEN_RATIO;
-  return height; // hidden
-}
-
-let drag = null;
-sheetGrabber.addEventListener("pointerdown", (event) => {
-  if (!isMobile()) return;
-  const height = dictionaryPanel.offsetHeight;
-  drag = { startY: event.clientY, height, lastT: stateTranslate(sheetState, height), moved: false };
-  dictionaryPanel.style.transition = "none";
-  sheetGrabber.setPointerCapture(event.pointerId);
-});
-sheetGrabber.addEventListener("pointermove", (event) => {
-  if (!drag) return;
-  const dy = event.clientY - drag.startY;
-  if (Math.abs(dy) > 4) drag.moved = true;
-  drag.lastT = Math.min(Math.max(stateTranslate(sheetState, drag.height) + dy, 0), drag.height);
-  dictionaryPanel.style.transform = `translateY(${drag.lastT}px)`;
-});
-function endDrag() {
-  if (!drag) return;
-  const { height, lastT, moved } = drag;
-  drag = null;
-  dictionaryPanel.style.transition = "";
-  if (!moved) {
-    setSheetState(sheetState === "full" ? "peek" : "full");
+  if (typing) {
+    if (event.key === "Escape") event.target.blur();
     return;
   }
-  const candidates = [["full", 0], ["peek", height * PEEK_HIDDEN_RATIO], ["hidden", height]];
-  let best = candidates[0];
-  for (const candidate of candidates) {
-    if (Math.abs(candidate[1] - lastT) < Math.abs(best[1] - lastT)) best = candidate;
+  if (event.key === "Escape") {
+    if (!modal.hidden) { closeModal(); return; }
+    if (pop.classList.contains("show")) { hidePopover(); return; }
+    if (findBar.classList.contains("open")) { closeFind(); return; }
+    if (sheet.classList.contains("open")) { closeSheet(); return; }
+    if (dict.classList.contains("open")) { closeDict(); return; }
+    if (toc.classList.contains("open")) { closeToc(); return; }
+    if (app.classList.contains("rail-open")) { closeRail(); return; }
+    if (app.classList.contains("focus")) { toggleFocus(); return; }
   }
-  setSheetState(best[0]);
-}
-sheetGrabber.addEventListener("pointerup", endDrag);
-sheetGrabber.addEventListener("pointercancel", endDrag);
+  if (event.key === "f") { toggleFocus(); return; }
+  if (event.key === "ArrowRight" && !container.hidden) { nextPage.click(); }
+  if (event.key === "ArrowLeft" && !container.hidden) { prevPage.click(); }
+});
 
-function toggleChrome() {
-  if (!isMobile()) return;
-  const hidden = document.body.classList.toggle("chrome-hidden");
-  if (hidden) {
-    document.body.classList.remove("tools-open");
-    toolsToggle.classList.remove("active");
-  }
-}
-
-/* ----- Touch: tap a word to define it; tap empty space to toggle chrome ----- */
-// Find the word under a screen point without creating a text selection,
-// so Android's selection callout / Circle-to-Search never fires while reading.
+/* ---------- Touch: tap a word to define; tap empty space toggles focus ---------- */
 function wordAtPoint(x, y) {
   let range = null;
-  if (document.caretRangeFromPoint) {
-    range = document.caretRangeFromPoint(x, y);
-  } else if (document.caretPositionFromPoint) {
+  if (document.caretRangeFromPoint) range = document.caretRangeFromPoint(x, y);
+  else if (document.caretPositionFromPoint) {
     const pos = document.caretPositionFromPoint(x, y);
     if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); }
   }
@@ -1021,8 +1463,7 @@ function wordAtPoint(x, y) {
   if (!node || node.nodeType !== 3 || !node.parentElement?.closest(".textLayer, .doc-reader")) return null;
   const text = node.textContent || "";
   const isWordChar = (ch) => ch && /[A-Za-z'’-]/.test(ch);
-  let start = range.startOffset;
-  let end = range.startOffset;
+  let start = range.startOffset, end = range.startOffset;
   while (start > 0 && isWordChar(text[start - 1])) start--;
   while (end < text.length && isWordChar(text[end])) end++;
   const word = extractLookupWord(text.slice(start, end));
@@ -1038,61 +1479,78 @@ container.addEventListener("pointerdown", (event) => {
   if (event.pointerType !== "touch") return;
   tapStart = { x: event.clientX, y: event.clientY, time: Date.now() };
 }, { passive: true });
+let lastTap = 0, lastTapXY = null;
 container.addEventListener("pointerup", (event) => {
   if (event.pointerType !== "touch" || !tapStart) return;
   const movedX = Math.abs(event.clientX - tapStart.x);
   const movedY = Math.abs(event.clientY - tapStart.y);
   const elapsed = Date.now() - tapStart.time;
+  const x = event.clientX, y = event.clientY;
   tapStart = null;
-  if (movedX > 10 || movedY > 10 || elapsed > 500) return; // scroll/hold, not a tap
-  if (annotationActive) return; // highlight/note mode: taps belong to the annotation editor
-  const hit = wordAtPoint(event.clientX, event.clientY);
-  if (hit) {
+  if (movedX > 10 || movedY > 10 || elapsed > 500) return;
+  if (annotationActive) return;
+
+  const define = () => {
+    const hit = wordAtPoint(x, y);
+    if (!hit) return false;
     setLookupRange(hit.range);
-    searchInput.value = hit.word;
-    lookup(hit.word);
-  } else if (sheetState === "hidden") {
-    toggleChrome();
+    lookup(hit.word, hit.range.getBoundingClientRect(), sentenceAround(hit.range.startContainer, hit.range.startOffset));
+    return true;
+  };
+
+  if (triggerMode === "double") {
+    const now = Date.now();
+    if (now - lastTap < 350 && lastTapXY && Math.hypot(x - lastTapXY.x, y - lastTapXY.y) < 28) {
+      lastTap = 0;
+      if (!define() && pop.classList.contains("show")) hidePopover();
+    } else { lastTap = now; lastTapXY = { x, y }; }
+    return;
   }
+  if (define()) return;
+  if (pop.classList.contains("show")) hidePopover();
+  else if (isMobile()) toggleFocus();
 }, { passive: true });
 
-/* ----- Touch: pinch to zoom the PDF (not the whole page) ----- */
+/* ---------- Touch: pinch to zoom the PDF ---------- */
 function touchDistance(touches) {
   const dx = touches[0].clientX - touches[1].clientX;
   const dy = touches[0].clientY - touches[1].clientY;
   return Math.hypot(dx, dy);
 }
-
-let pinch = null;
-let pendingScale = null;
-let scaleRaf = null;
-function applyPendingScale() {
+let pinch = null, pendingScale = null, pendingSize = null, scaleRaf = null;
+function applyPending() {
   scaleRaf = null;
   if (pendingScale != null) { pdfViewer.currentScale = pendingScale; pendingScale = null; }
+  if (pendingSize != null) { setReadingSize(pendingSize); pendingSize = null; }
 }
 container.addEventListener("touchstart", (event) => {
-  if (event.touches.length === 2 && currentDocument) {
-    pinch = { startDistance: touchDistance(event.touches), startScale: pdfViewer.currentScale };
+  if (event.touches.length !== 2) return;
+  if (viewMode === "pdf" && currentDocument) {
+    pinch = { mode: "pdf", startDistance: touchDistance(event.touches), startScale: pdfViewer.currentScale };
+  } else if (viewMode === "reflow") {
+    pinch = { mode: "reflow", startDistance: touchDistance(event.touches), startSize: currentReadingSize() };
   }
 }, { passive: false });
 container.addEventListener("touchmove", (event) => {
   if (!pinch || event.touches.length !== 2) return;
-  event.preventDefault(); // stop the browser from zooming the whole page
+  event.preventDefault();
   const ratio = touchDistance(event.touches) / pinch.startDistance;
-  pendingScale = Math.min(Math.max(pinch.startScale * ratio, 0.25), 6);
-  if (!scaleRaf) scaleRaf = requestAnimationFrame(applyPendingScale);
+  if (pinch.mode === "pdf") pendingScale = Math.min(Math.max(pinch.startScale * ratio, 0.25), 6);
+  else pendingSize = pinch.startSize * ratio;
+  if (!scaleRaf) scaleRaf = requestAnimationFrame(applyPending);
 }, { passive: false });
-container.addEventListener("touchend", (event) => {
-  if (event.touches.length < 2) pinch = null;
-}, { passive: true });
+container.addEventListener("touchend", (event) => { if (event.touches.length < 2) pinch = null; }, { passive: true });
 
-// Switching between mobile/desktop: re-apply the saved panel width (desktop only).
-mobileMedia.addEventListener("change", () => {
-  applyDictWidth();
-  if (!mobileMedia.matches) {
-    setSheetState("hidden");
-    document.body.classList.remove("chrome-hidden", "tools-open", "sheet-full");
-    dictionaryPanel.style.transform = "";
-    dictionaryPanel.style.transition = "";
-  }
-});
+mobileMedia.addEventListener("change", () => { if (!isMobile()) closeRail(); });
+
+/* ---------- Init ---------- */
+startTheme();
+startTypography();
+applyTriggerUI();
+applyPopoverToggle();
+applyColumns();
+applyAnnotations();
+refreshRecent();
+showGuide();
+showView("lib");
+updateProgress();

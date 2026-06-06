@@ -39,7 +39,7 @@ function asPromise(request) {
 }
 
 // A stable id for the same file across sessions (name + size + mtime).
-function fileId(file) {
+export function fileId(file) {
   return `${file.name}::${file.size}::${file.lastModified || 0}`;
 }
 

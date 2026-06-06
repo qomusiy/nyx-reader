@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="paper">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -7,168 +7,285 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Spectral:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>
 
   <body>
-    <header class="topbar">
-      <div class="topbar-left">
-        <button id="menu-button" class="menu-button" type="button" aria-label="Menu" aria-expanded="false">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M4 7h16M4 12h16M4 17h16" />
-          </svg>
-        </button>
+    <!-- Icon sprite (clean line set, referenced via <use href="#i-…">) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="i-list" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="20" y1="20" x2="15.5" y2="15.5"/></symbol>
+      <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><line x1="14" y1="4.5" x2="14" y2="19.5"/></symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 4H6a2 2 0 0 0-2 2v2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M20 16v2a2 2 0 0 1-2 2h-2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="15" cy="7" r="2.4"/><circle cx="9" cy="17" r="2.4"/></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.5C10.4 5.4 8 5 6 5H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2c2 0 4.4.4 6 1.5"/><path d="M12 6.5C13.6 5.4 16 5 18 5h2a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-2c-2 0-4.4.4-6 1.5"/><line x1="12" y1="6.5" x2="12" y2="21.5"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></symbol>
+      <symbol id="i-volume" viewBox="0 0 24 24"><path d="M5 9.5v5h3.5L13 18V6l-4.5 3.5H5z"/><path d="M16 9.2a4 4 0 0 1 0 5.6"/><path d="M18.5 7a7 7 0 0 1 0 10"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><line x1="5" y1="12" x2="18" y2="12"/><polyline points="12.5,6 18.5,12 12.5,18"/></symbol>
+      <symbol id="i-chev-l" viewBox="0 0 24 24"><polyline points="15,5 8,12 15,19"/></symbol>
+      <symbol id="i-chev-r" viewBox="0 0 24 24"><polyline points="9,5 16,12 9,19"/></symbol>
+      <symbol id="i-up" viewBox="0 0 24 24"><polyline points="6,15 12,9 18,15"/></symbol>
+      <symbol id="i-down" viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></symbol>
+      <symbol id="i-marker" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M9 16l-4 1 1-4 8.4-8.4a2.1 2.1 0 0 1 3 3z"/></symbol>
+      <symbol id="i-note" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 3z"/></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-1"/></symbol>
+      <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 7l5 5-5 5"/><path d="M20 12H9a5 5 0 0 0 0 10h1"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14,3 14,8 19,8"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7.5,10.5 12,15 16.5,10.5"/><path d="M5 19h14"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8"/></symbol>
+      <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><line x1="7" y1="10" x2="7" y2="10"/><line x1="11" y1="10" x2="11" y2="10"/><line x1="15" y1="10" x2="15" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></symbol>
+      <symbol id="i-fullscreen" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4"/><path d="M20 9V5a1 1 0 0 0-1-1h-4"/><path d="M4 15v4a1 1 0 0 0 1 1h4"/><path d="M20 15v4a1 1 0 0 1-1 1h-4"/></symbol>
+      <symbol id="i-spread" viewBox="0 0 24 24"><rect x="3.5" y="5" width="7.5" height="14" rx="1"/><rect x="13" y="5" width="7.5" height="14" rx="1"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+      <symbol id="i-cards" viewBox="0 0 24 24"><rect x="3.5" y="8" width="12" height="12" rx="2"/><path d="M8 5.5h9a2 2 0 0 1 2 2V16"/></symbol>
+      <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-3.6L6 20V5a1 1 0 0 1 1-1z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><polyline points="5,12.5 10,17.5 19,7"/></symbol>
+    </svg>
 
-        <nav id="menu" class="menu" hidden>
-          <div id="menu-status" class="menu-info">No document open</div>
-          <hr class="menu-sep" />
+    <div class="app" id="app">
+      <!-- Left rail -->
+      <nav class="rail" aria-label="Primary">
+        <button class="rail-btn" id="open-btn" aria-label="Open file"><svg class="ic"><use href="#i-plus" /></svg><span class="rail-lbl">Open</span></button>
+        <button class="rail-btn on" data-nav="read" aria-label="Reader"><svg class="ic"><use href="#i-book" /></svg><span class="rail-lbl">Reader</span></button>
+        <button class="rail-btn" data-nav="lib" aria-label="Library"><svg class="ic"><use href="#i-grid" /></svg><span class="rail-lbl">Library</span></button>
+        <button class="rail-btn" data-nav="vocab" aria-label="Vocabulary"><svg class="ic"><use href="#i-cards" /></svg><span class="rail-lbl">Vocab</span></button>
+        <div class="sp"></div>
+        <button class="rail-btn" id="gear-btn" aria-label="Settings"><svg class="ic"><use href="#i-sliders" /></svg><span class="rail-lbl">Settings</span></button>
+      </nav>
 
-          <label class="menu-item" for="file-input"><span class="menu-icon">＋</span>Open file</label>
+      <div class="main">
+        <!-- Top bar -->
+        <header class="topbar">
+          <button class="tbtn" id="rail-toggle" title="Menu" aria-label="Menu"><svg class="ic"><use href="#i-list" /></svg></button>
+          <button class="tbtn reader-only" id="toc-btn" title="Contents" aria-label="Contents" hidden><svg class="ic"><use href="#i-list" /></svg></button>
+          <button class="tbtn reader-only" id="focus-btn" title="Focus mode (F)" aria-label="Focus mode"><svg class="ic"><use href="#i-expand" /></svg></button>
           <input id="file-input" type="file" accept=".pdf,.txt,.md,.markdown,.epub,.docx,application/pdf,text/plain" hidden />
 
-          <hr class="menu-sep pdf-only" />
-
-          <div class="menu-zoom pdf-only">
-            <button id="zoom-out" class="zoom-step" type="button" aria-label="Zoom out">−</button>
-            <span id="zoom-label" class="zoom-label">Fit width</span>
-            <button id="zoom-in" class="zoom-step" type="button" aria-label="Zoom in">+</button>
+          <div class="title-wrap">
+            <div class="bk" id="doc-title">Nyx Reader</div>
+            <div class="ch" id="doc-sub">Open a document to begin</div>
           </div>
 
-          <hr class="menu-sep pdf-only" />
+          <div class="tools reader-only" id="annotation-tools" hidden>
+            <button class="tbtn" id="tool-highlight" title="Highlight" aria-label="Highlight"><svg class="ic"><use href="#i-marker" /></svg></button>
+            <button class="tbtn" id="tool-note" title="Add note" aria-label="Add note"><svg class="ic"><use href="#i-note" /></svg></button>
+          </div>
 
-          <button id="cycle-spread" class="menu-item menu-item-split pdf-only" type="button">
-            <span><span class="menu-icon">▦</span>Two-page view</span><span id="spread-state" class="menu-state">Off</span>
-          </button>
-          <button id="toggle-annotations" class="menu-item menu-item-split on pdf-only" type="button">
-            <span><span class="menu-icon">✎</span>Annotation tools</span><span class="check">✓</span>
-          </button>
+          <button class="tbtn reader-only" id="save-pdf" title="Save annotated copy" aria-label="Save annotated copy"><svg class="ic"><use href="#i-download" /></svg></button>
+          <button class="tbtn reader-only" id="find-button" title="Search (Ctrl+F)" aria-label="Search" hidden><svg class="ic"><use href="#i-search" /></svg></button>
+          <button class="tbtn reader-only" id="dict-button" title="Dictionary" aria-label="Dictionary"><svg class="ic"><use href="#i-panel" /></svg></button>
+        </header>
 
-          <hr class="menu-sep" />
-
-          <button id="fullscreen" class="menu-item" type="button"><span class="menu-icon">⛶</span><span id="fullscreen-label">Enter fullscreen</span></button>
-          <button id="save-pdf" class="menu-item pdf-only" type="button"><span class="menu-icon">⤓</span>Save annotated copy</button>
-          <button id="properties" class="menu-item pdf-only" type="button"><span class="menu-icon">ⓘ</span>Properties</button>
-          <button id="shortcuts" class="menu-item" type="button"><span class="menu-icon">⌨</span>Keyboard shortcuts</button>
-
-          <hr class="menu-sep" />
-
-          <button id="theme-toggle" class="menu-item" type="button">
-            <span class="menu-icon" id="theme-icon">☾</span><span id="theme-label">Night mode</span>
-          </button>
-        </nav>
-
-        <button id="tools-toggle" class="icon-btn" type="button" title="Annotation tools" aria-label="Annotation tools" hidden>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>
-        </button>
-
-        <div id="annotation-tools" class="annotation-tools" hidden>
-          <div class="topbar-divider"></div>
-          <button id="tool-select" class="tool-btn active" type="button" title="Select / read">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M5 3l6 17 2.4-7 7-2.4z" /></svg>
-          </button>
-          <button id="tool-highlight" class="tool-btn" type="button" title="Highlight text">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16" /><path d="M9 16l-4 1 1-4 8.4-8.4a2.1 2.1 0 0 1 3 3z" /></svg>
-          </button>
-          <button id="tool-note" class="tool-btn" type="button" title="Add note">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-4 3z" /></svg>
-          </button>
-          <div id="highlight-colors" class="highlight-colors" hidden>
-            <button class="swatch active" type="button" data-color="#fff066" style="--swatch:#fff066" aria-label="Yellow"></button>
+        <!-- Contextual annotation bar (colours + undo/redo/delete) -->
+        <div class="annotbar" id="annotbar" hidden>
+          <div class="highlight-colors" id="highlight-colors">
+            <button class="swatch on" type="button" data-color="#fff066" style="--swatch:#fff066" aria-label="Yellow"></button>
             <button class="swatch" type="button" data-color="#9ce28b" style="--swatch:#9ce28b" aria-label="Green"></button>
             <button class="swatch" type="button" data-color="#ffb3c8" style="--swatch:#ffb3c8" aria-label="Pink"></button>
             <button class="swatch" type="button" data-color="#9fd2ff" style="--swatch:#9fd2ff" aria-label="Blue"></button>
           </div>
-          <div class="topbar-divider edit-divider"></div>
-          <button id="edit-undo" class="tool-btn" type="button" title="Undo" aria-label="Undo">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L4 12l5 5" /><path d="M4 12h11a5 5 0 0 1 0 10h-1" /></svg>
-          </button>
-          <button id="edit-redo" class="tool-btn" type="button" title="Redo" aria-label="Redo">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7l5 5-5 5" /><path d="M20 12H9a5 5 0 0 0 0 10h1" /></svg>
-          </button>
-          <button id="edit-delete" class="tool-btn" type="button" title="Delete selected" aria-label="Delete selected">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" /></svg>
-          </button>
+          <div class="annotbar-sep"></div>
+          <button class="tbtn sm" id="edit-undo" title="Undo" aria-label="Undo"><svg class="ic"><use href="#i-undo" /></svg></button>
+          <button class="tbtn sm" id="edit-redo" title="Redo" aria-label="Redo"><svg class="ic"><use href="#i-redo" /></svg></button>
+          <button class="tbtn sm" id="edit-delete" title="Delete selected" aria-label="Delete selected"><svg class="ic"><use href="#i-trash" /></svg></button>
         </div>
-      </div>
 
-      <div id="doc-title" class="doc-title"></div>
+        <!-- Search bar (PDF find) -->
+        <div class="searchbar" id="find-bar">
+          <svg class="ic dim"><use href="#i-search" /></svg>
+          <input id="find-input" type="text" placeholder="Find in document" autocomplete="off" spellcheck="false" />
+          <span class="cnt" id="find-count"></span>
+          <div class="nav-s">
+            <button class="tbtn sm" id="find-prev" aria-label="Previous match"><svg class="ic"><use href="#i-up" /></svg></button>
+            <button class="tbtn sm" id="find-next" aria-label="Next match"><svg class="ic"><use href="#i-down" /></svg></button>
+            <button class="tbtn sm" id="find-close" aria-label="Close"><svg class="ic"><use href="#i-close" /></svg></button>
+          </div>
+        </div>
 
-      <div class="topbar-right">
-        <button id="dict-button" class="icon-btn" type="button" title="Dictionary" aria-label="Dictionary">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 0-2 2z" /><path d="M19 17H6a2 2 0 0 0-2 2" /></svg>
-        </button>
-        <button id="find-button" class="icon-btn" type="button" title="Find in document (Ctrl+F)" hidden>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
-        </button>
-      </div>
-    </header>
+        <!-- Stage holds the reader + library views (both absolute, one shown) -->
+        <div class="stage">
+          <!-- Reader view (PDF canvas + reflow HTML live here) -->
+          <div class="view" id="viewer-container">
+            <div id="viewer" class="pdfViewer"></div>
+            <div id="doc-reader" class="doc-reader" hidden></div>
+          </div>
 
-    <div id="find-bar" class="find-bar" hidden>
-      <input id="find-input" class="find-input" type="text" placeholder="Find in document" autocomplete="off" spellcheck="false" />
-      <span id="find-count" class="find-count"></span>
-      <button id="find-prev" class="find-nav" type="button" aria-label="Previous match">↑</button>
-      <button id="find-next" class="find-nav" type="button" aria-label="Next match">↓</button>
-      <button id="find-close" class="find-nav" type="button" aria-label="Close">✕</button>
-    </div>
-
-    <div class="workspace">
-      <div id="viewer-container" class="viewer-container">
-        <div id="welcome" class="welcome">
-          <div class="welcome-card">
-            <div class="welcome-icon">Aa</div>
-            <h1>Open a document</h1>
-            <p>Read PDF, EPUB, Word and text files beautifully — and double-click any English word for its translation.</p>
-            <label class="welcome-open-button" for="file-input">Choose file</label>
-            <p class="welcome-formats">PDF · EPUB · DOCX · TXT · MD</p>
+          <!-- Library view (open + recent) -->
+          <div class="view library" id="library" hidden>
+          <div class="libwrap">
+            <div class="vh">Library</div>
+            <div class="vsub">Open a PDF, EPUB, Word or text file — or pick up a recent one.</div>
+            <div class="libactions">
+              <button class="pbtn primary" id="lib-open"><svg class="ic"><use href="#i-file" /></svg>Open a file</button>
+              <span class="libformats">PDF · EPUB · DOCX · TXT · MD</span>
+            </div>
             <div id="recent-files" class="recent-files" hidden>
-              <div class="recent-label">Recent</div>
-              <div id="recent-list" class="recent-list"></div>
+              <div class="dlabel">Recent</div>
+              <div id="recent-list" class="books"></div>
+            </div>
+          </div>
+          </div>
+
+          <!-- Vocabulary view -->
+          <div class="view vocab-view" id="vocab" hidden>
+            <div class="vocabwrap">
+              <div class="vh">Vocabulary</div>
+              <div class="vsub">Words you saved while reading — each keeps the sentence it came from.</div>
+              <div class="vocab-actions">
+                <button class="pbtn primary" id="vocab-export"><svg class="ic"><use href="#i-download" /></svg>Export CSV</button>
+                <span class="libformats" id="vocab-count"></span>
+              </div>
+              <div id="vocab-list" class="vocab-list"></div>
+              <div id="vocab-empty" class="vocab-empty" hidden>
+                <div class="dictionary-empty-icon">★</div>
+                <p>No saved words yet. Look up a word and tap the bookmark to save it here.</p>
+              </div>
             </div>
           </div>
         </div>
-        <div id="viewer" class="pdfViewer"></div>
-        <div id="doc-reader" class="doc-reader" hidden></div>
-      </div>
 
-      <div id="scrim" class="scrim"></div>
+        <!-- Footer progress -->
+        <footer class="footer reader-only">
+          <button class="pager" id="prev-page" aria-label="Previous page"><svg class="ic"><use href="#i-chev-l" /></svg></button>
+          <span class="fstat" id="foot-pos"></span>
+          <div class="track"><div class="fill" id="progress-fill"></div></div>
+          <span class="fstat" id="foot-stat"></span>
+          <button class="pager" id="next-page" aria-label="Next page"><svg class="ic"><use href="#i-chev-r" /></svg></button>
+        </footer>
 
-      <aside class="dictionary-panel" aria-label="Dictionary">
-        <div id="dict-resizer" class="dict-resizer" role="separator" aria-orientation="vertical" aria-label="Resize dictionary panel"></div>
-        <button id="sheet-grabber" class="sheet-grabber" type="button" aria-label="Resize dictionary"></button>
-        <button id="sheet-close" class="sheet-close" type="button" aria-label="Close dictionary">✕</button>
-        <div class="dictionary-header">
-          <span class="dictionary-label">DICTIONARY</span>
+        <!-- Word popover (quick gloss) -->
+        <div class="pop" id="pop" role="dialog" aria-label="Word lookup">
+          <div class="pop-head">
+            <span class="wd" id="pop-word"></span>
+            <div class="pop-acts">
+              <button class="iconbtn" id="pop-audio" title="Pronounce" aria-label="Pronounce"><svg class="ic"><use href="#i-volume" /></svg></button>
+              <button class="iconbtn" id="pop-save" title="Save word" aria-label="Save word"><svg class="ic"><use href="#i-bookmark" /></svg></button>
+            </div>
+          </div>
+          <div class="ph" id="pop-ph"></div>
+          <div class="gloss" id="pop-gloss"></div>
+          <button class="more" id="pop-more" type="button">Full entry &amp; examples <svg class="ic"><use href="#i-arrow" /></svg></button>
+        </div>
+
+        <!-- Note editor (reflow comments) -->
+        <div class="note-pop" id="note-pop">
+          <textarea id="note-text" placeholder="Add a note…"></textarea>
+          <div class="note-pop-actions">
+            <button class="save" id="note-save" type="button">Save</button>
+            <button class="del" id="note-del" type="button">Delete</button>
+          </div>
+        </div>
+
+        <!-- Contents drawer -->
+        <aside class="toc" id="toc">
+          <div class="dhead"><span class="lbl">Contents</span><button class="iconbtn" id="toc-x" aria-label="Close"><svg class="ic"><use href="#i-close" /></svg></button></div>
+          <div id="toc-list"></div>
+        </aside>
+
+        <!-- Dictionary drawer -->
+        <aside class="drawer" id="dict" aria-label="Dictionary">
+          <div class="dhead">
+            <span class="lbl">Dictionary</span>
+            <button class="iconbtn" id="dict-x" aria-label="Close"><svg class="ic"><use href="#i-close" /></svg></button>
+          </div>
           <div class="search-box">
-            <input
-              id="search-input"
-              class="search-input"
-              type="text"
-              placeholder="Search words or phrases…"
-              autocomplete="off"
-              autocapitalize="off"
-              spellcheck="false"
-            />
-            <span class="search-icon" aria-hidden="true">⌕</span>
+            <svg class="ic dim"><use href="#i-search" /></svg>
+            <input id="search-input" class="search-input" type="text" placeholder="Search a word…" autocomplete="off" autocapitalize="off" spellcheck="false" />
             <div id="suggestions" class="suggestions" hidden></div>
           </div>
-        </div>
-
-        <div id="dictionary-content" class="dictionary-content">
-          <div class="dictionary-empty">
-            <div class="dictionary-empty-icon">Aa</div>
-            <p>Double-click an English word in the PDF, or type one above, to see its translation and examples.</p>
+          <div id="dictionary-content" class="dictionary-content">
+            <div class="dictionary-empty">
+              <div class="dictionary-empty-icon">Aa</div>
+              <p>Double-click or tap an English word, or type one above, to see its translation and examples.</p>
+            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
+
+        <!-- Settings sheet -->
+        <div class="scrim" id="scrim"></div>
+        <aside class="sheet" id="sheet" aria-label="Settings">
+          <div class="sheet-head"><h3>Settings</h3><button class="iconbtn" id="sheet-x" aria-label="Close"><svg class="ic"><use href="#i-close" /></svg></button></div>
+
+          <div class="field">
+            <label>Theme</label>
+            <div class="seg" id="theme-seg">
+              <button data-theme="paper"><span class="swatch-sq" style="background:#fbf8f2"></span>Paper</button>
+              <button data-theme="sepia"><span class="swatch-sq" style="background:#f4ecd9"></span>Sepia</button>
+              <button data-theme="night"><span class="swatch-sq" style="background:#15181c"></span>Night</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Look up a word on</label>
+            <div class="seg" id="trigger-seg">
+              <button data-trig="single" class="on">Single tap</button>
+              <button data-trig="double">Double tap</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <button class="rowbtn" id="toggle-popover"><svg class="ic"><use href="#i-panel" /></svg><span>Always show popover</span><span class="rowstate" id="popover-state">Off</span></button>
+          </div>
+
+          <div class="sheet-group" id="reading-group">
+            <div class="dlabel">Reading (text formats)</div>
+            <div class="field">
+              <label>Reading font</label>
+              <select id="font-sel">
+                <option value='"Newsreader", Georgia, serif'>Newsreader</option>
+                <option value='"Spectral", Georgia, serif'>Spectral</option>
+                <option value='"Literata", Georgia, serif'>Literata</option>
+                <option value='"Hanken Grotesk", sans-serif'>Hanken Grotesk (sans)</option>
+              </select>
+            </div>
+            <div class="field"><label>Text size <span class="rangeval" id="size-val">19px</span></label><input type="range" id="size-r" min="15" max="28" step="1" value="19" /></div>
+            <div class="field"><label>Line spacing <span class="rangeval" id="lead-val">1.75</span></label><input type="range" id="lead-r" min="1.4" max="2.1" step="0.01" value="1.75" /></div>
+            <div class="field"><label>Column width <span class="rangeval" id="meas-val">42rem</span></label><input type="range" id="meas-r" min="32" max="56" step="1" value="42" /></div>
+            <div class="field">
+              <button class="rowbtn" id="toggle-columns"><svg class="ic"><use href="#i-spread" /></svg><span>Two-page view</span><span class="rowstate" id="columns-state">Off</span></button>
+            </div>
+          </div>
+
+          <div class="sheet-group" id="pdf-group">
+            <div class="dlabel">PDF</div>
+            <div class="field">
+              <button class="rowbtn" id="cycle-spread"><svg class="ic"><use href="#i-spread" /></svg><span>Two-page view</span><span class="rowstate" id="spread-state">Off</span></button>
+            </div>
+          </div>
+
+          <div class="sheet-group">
+            <div class="dlabel">Annotations</div>
+            <div class="field">
+              <button class="rowbtn" id="toggle-annotations"><svg class="ic"><use href="#i-marker" /></svg><span>Annotation tools</span><span class="rowstate" id="annot-state">On</span></button>
+            </div>
+          </div>
+
+          <div class="sheet-group">
+            <div class="dlabel">Document</div>
+            <div class="field stackbtns">
+              <button class="rowbtn" id="fullscreen"><svg class="ic"><use href="#i-fullscreen" /></svg><span id="fullscreen-label">Enter fullscreen</span></button>
+              <button class="rowbtn" id="properties"><svg class="ic"><use href="#i-info" /></svg><span>Document properties</span></button>
+              <button class="rowbtn" id="shortcuts"><svg class="ic"><use href="#i-keyboard" /></svg><span>Keyboard shortcuts</span></button>
+            </div>
+          </div>
+        </aside>
+
+        <div class="toast" id="toast"></div>
+      </div>
     </div>
 
+    <!-- Modal (properties / shortcuts) -->
     <div id="modal" class="modal" hidden>
       <div class="modal-card">
         <div class="modal-head">
           <h3 id="modal-title"></h3>
-          <button id="modal-close" class="modal-close" type="button" aria-label="Close">✕</button>
+          <button id="modal-close" class="iconbtn" type="button" aria-label="Close"><svg class="ic"><use href="#i-close" /></svg></button>
         </div>
         <div id="modal-body" class="modal-body"></div>
       </div>
