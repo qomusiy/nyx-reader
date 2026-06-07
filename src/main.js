@@ -740,42 +740,19 @@ function setReadingSize(px) {
   setRangeFill(sizeR);
   localStorage.setItem("nyx-read-size", String(size));
 }
-// PDF zoom is map-style: the wheel / two-finger trackpad scroll zooms toward the
-// cursor (no modifier needed — some browsers, e.g. Firefox on Linux, never tag a
-// trackpad pinch with ctrlKey, so requiring Ctrl made the gesture dead). You pan
-// a zoomed page by dragging it. For reflow text the wheel still scrolls to read,
-// and Ctrl/⌘+wheel nudges the text size.
+// Standard PDF-reader behaviour: plain wheel / two-finger scroll scrolls the
+// document; a trackpad pinch or Ctrl/⌘+wheel zooms toward the cursor (browsers
+// report a pinch as a ctrl-wheel event). Proportional + clamped for a smooth feel.
 container.addEventListener("wheel", (event) => {
+  if (!(event.ctrlKey || event.metaKey)) return; // no modifier -> let it scroll
+  event.preventDefault();
   if (viewMode === "pdf" && currentDocument) {
-    event.preventDefault();
     const delta = Math.max(-60, Math.min(60, event.deltaY));
     zoomAtPointer(event, Math.exp(-delta * 0.0022));
-  } else if (viewMode === "reflow" && (event.ctrlKey || event.metaKey)) {
-    event.preventDefault();
+  } else if (viewMode === "reflow") {
     setReadingSize(currentReadingSize() + (event.deltaY < 0 ? 1 : -1));
   }
 }, { passive: false });
-
-// Drag to pan the PDF (mouse/trackpad), so a zoomed page is still navigable.
-// Skipped while annotating (text selection is needed there) and for touch
-// (handled by the pinch/scroll touch gestures).
-let panState = null;
-container.addEventListener("pointerdown", (event) => {
-  if (event.pointerType === "touch" || event.button !== 0) return;
-  if (viewMode !== "pdf" || !currentDocument || annotationActive) return;
-  panState = { x: event.clientX, y: event.clientY, left: container.scrollLeft, top: container.scrollTop, moved: false };
-});
-container.addEventListener("pointermove", (event) => {
-  if (!panState) return;
-  const dx = event.clientX - panState.x;
-  const dy = event.clientY - panState.y;
-  if (!panState.moved && Math.hypot(dx, dy) < 3) return;
-  panState.moved = true;
-  container.classList.add("panning");
-  container.scrollLeft = panState.left - dx;
-  container.scrollTop = panState.top - dy;
-});
-window.addEventListener("pointerup", () => { if (panState) { container.classList.remove("panning"); panState = null; } });
 
 spreadButton.addEventListener("click", () => {
   spreadIndex = (spreadIndex + 1) % spreadCycle.length;

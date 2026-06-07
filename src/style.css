@@ -177,10 +177,6 @@ body:not([data-view="read"]) .reader-only { display: none !important; }
 body.dict-resizing #viewer-container { scroll-behavior: auto; }
 
 .pdfViewer { padding: 34px 0 120px; }
-/* Map-style PDF: pages are draggable to pan (grab), except while annotating */
-#viewer-container:not(.select-mode) .pdfViewer .page,
-#viewer-container:not(.select-mode) .pdfViewer .textLayer { cursor: grab; }
-#viewer-container.panning .page, #viewer-container.panning .textLayer { cursor: grabbing; }
 .pdfViewer .page { margin: 0 auto 22px; border: none; border-radius: 4px; background: #fff; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.13); }
 html[data-theme="night"] .pdfViewer .page { box-shadow: none; border: 0.5px solid var(--hair); filter: invert(0.92) hue-rotate(180deg); }
 /* Translucent so the (transparent) PDF glyph beneath still shows through. */
