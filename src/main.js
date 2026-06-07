@@ -10,7 +10,8 @@ import "pdfjs-dist/web/pdf_viewer.css";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "./style.css";
 import { fetchWord, suggestWords } from "./dictionary.js";
-import { saveRecent, listRecent, touchRecent, removeRecent, fileId } from "./recent.js";
+import { saveRecent, listRecent, touchRecent, removeRecent, getRecent, fileId } from "./recent.js";
+import { BUILTIN_BOOKS } from "./library.js";
 import { readText, readDocx, readEpub } from "./readers/reflow.js";
 import { saveVocab, removeVocab, listVocab, hasVocab, getHighlights, setHighlights } from "./store.js";
 import { GUIDE_HTML } from "./welcome.js";
@@ -34,6 +35,8 @@ const vocabCount = $("#vocab-count");
 const vocabEmpty = $("#vocab-empty");
 const recentFiles = $("#recent-files");
 const recentList = $("#recent-list");
+const recentMore = $("#recent-more");
+const builtinList = $("#builtin-list");
 const docTitle = $("#doc-title");
 const docSub = $("#doc-sub");
 
@@ -85,7 +88,7 @@ const aaX = $("#aa-x");
 const readingGroup = $("#reading-group");
 const pdfGroup = $("#pdf-group");
 const langSeg = $("#lang-seg");
-const themeSeg = $("#theme-seg");
+const themeSegs = [...document.querySelectorAll(".theme-seg")];
 const fontSel = $("#font-sel");
 const sizeR = $("#size-r");
 const leadR = $("#lead-r");
@@ -97,7 +100,9 @@ const spreadButton = $("#cycle-spread");
 const spreadState = $("#spread-state");
 const annotationsToggle = $("#toggle-annotations");
 const annotState = $("#annot-state");
-const fullscreenButton = $("#fullscreen");
+const focusMenu = $("#focus-menu");
+const menuFocus = $("#menu-focus");
+const menuFullscreen = $("#menu-fullscreen");
 const fullscreenLabel = $("#fullscreen-label");
 const propertiesButton = $("#properties");
 const shortcutsButton = $("#shortcuts");
@@ -178,12 +183,15 @@ function showView(name) {
 }
 railNav.forEach((b) => b.addEventListener("click", () => {
   closeRail();
-  if (b.dataset.nav === "lib") { refreshRecent(); showView("lib"); }
+  if (b.dataset.nav === "lib") { renderBuiltin(); refreshRecent(); showView("lib"); }
   else if (b.dataset.nav === "vocab") { refreshVocab(); showView("vocab"); }
   else showView("read");
 }));
 
-// The Reader is never blank: with no document open it shows the guide.
+// The Reader is never blank: with no document open it shows the guide. The
+// guide is reflow HTML, so it honours the reading-typography settings — we flag
+// it as such so the "Aa" panel exposes those controls (not just the theme).
+let guideShown = false;
 function showGuide() {
   reflowCleanHTML = "";
   reflowHighlights = [];
@@ -191,6 +199,7 @@ function showGuide() {
   docReader.innerHTML = GUIDE_HTML;
   docReader.hidden = false;
   viewer.hidden = true;
+  guideShown = true;
   docTitle.textContent = "Nyx Reader";
   docSub.textContent = "Guide";
 }
@@ -265,6 +274,7 @@ async function openPdf(file, fromRecent = false) {
     currentFileId = fileId(file);
     currentKind = "pdf";
     viewMode = "pdf";
+    guideShown = false;
     document.body.classList.remove("reflow-mode");
     viewer.hidden = false;
     pdfViewer.setDocument(currentDocument);
@@ -307,6 +317,7 @@ async function openReflow(file, kind, fromRecent = false) {
     currentFileId = fileId(file);
     currentKind = kind;
     viewMode = "reflow";
+    guideShown = false;
     document.body.classList.add("reflow-mode");
     // Highlighting + notes work on reflow text too.
     toolNote.style.display = "";
@@ -369,14 +380,128 @@ async function saveRecentSafe(file, kind, buffer) {
   }
 }
 
-async function refreshRecent() {
-  let items = [];
-  try { items = await listRecent(); } catch { /* ignore */ }
-  recentList.replaceChildren();
-  if (!items.length) { recentFiles.hidden = true; return; }
-  recentFiles.hidden = false;
+const RECENT_PREVIEW = 3; // how many recents to show before "Show all"
+let recentExpanded = false;
+let recentItems = [];
 
-  items.forEach((record) => {
+async function refreshRecent() {
+  try { recentItems = await listRecent(); } catch { recentItems = []; }
+  if (!recentItems.length) { recentFiles.hidden = true; recentMore.hidden = true; return; }
+  recentFiles.hidden = false;
+  renderRecentList();
+}
+
+function renderRecentList() {
+  recentList.replaceChildren();
+  const shown = recentExpanded ? recentItems : recentItems.slice(0, RECENT_PREVIEW);
+  shown.forEach((record) => recentList.append(recentRow(record)));
+
+  if (recentItems.length > RECENT_PREVIEW) {
+    recentMore.hidden = false;
+    recentMore.textContent = recentExpanded
+      ? t("lib.showLess")
+      : t("lib.showAll", { n: recentItems.length });
+  } else {
+    recentMore.hidden = true;
+  }
+}
+recentMore.addEventListener("click", () => { recentExpanded = !recentExpanded; renderRecentList(); });
+
+// One recent as a horizontal list row: thumbnail, name, meta, progress, remove.
+function recentRow(record) {
+  const builtin = builtinFor(record);
+  const name = builtin ? builtin.title : record.name;
+
+  const row = document.createElement("div");
+  row.className = "rrow";
+
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "rrow-open";
+  open.setAttribute("aria-label", name);
+
+  // Thumbnail — a real cover for built-ins, a tinted initial otherwise.
+  const thumb = document.createElement("div");
+  thumb.className = "rrow-thumb";
+  if (builtin) {
+    const img = document.createElement("img");
+    img.src = builtin.cover; img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+    thumb.append(img);
+  } else {
+    thumb.style.background = coverColor(record.name);
+    thumb.append(createTextElement("span", coverLetter(record.name), "rrow-letter"));
+  }
+  open.append(thumb);
+
+  const main = document.createElement("div");
+  main.className = "rrow-main";
+  main.append(createTextElement("div", name, "rrow-name"));
+  const meta = [recentBadge(record.kind), formatBytes(record.size), relativeTime(record.openedAt)];
+  main.append(createTextElement("div", meta.join(" · "), "rrow-meta"));
+  open.append(main);
+
+  // Reading progress (the "how much read" line).
+  const fraction = readingFraction(record.id);
+  const side = document.createElement("div");
+  side.className = "rrow-side";
+  const bar = document.createElement("div");
+  bar.className = "rrow-progress";
+  const fill = document.createElement("div");
+  fill.className = "rrow-progress-fill";
+  fill.style.width = `${Math.round(fraction * 100)}%`;
+  bar.append(fill);
+  side.append(bar);
+  side.append(createTextElement("div",
+    fraction > 0.01 ? t("recent.read", { n: Math.round(fraction * 100) }) : t("recent.notStarted"),
+    "rrow-pct"));
+  open.append(side);
+
+  open.addEventListener("click", () => openRecent(record));
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "rrow-x";
+  remove.setAttribute("aria-label", t("vocab.remove", { word: name }));
+  remove.innerHTML = `<svg class="ic"><use href="#i-close" /></svg>`;
+  remove.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    await removeRecent(record.id);
+    localStorage.removeItem(`nyx-prog::${record.id}`);
+    refreshRecent();
+  });
+
+  row.append(open, remove);
+  return row;
+}
+
+// Match a recent record back to a built-in book (so opened built-ins show their
+// proper title + cover in the recents list).
+function builtinFor(record) {
+  return BUILTIN_BOOKS.find((b) => b.file === record.name && b.size === record.size) || null;
+}
+
+// Compact "time since last opened" using the i18n unit strings.
+function relativeTime(ms) {
+  if (!ms) return "";
+  const secs = Math.max(0, (Date.now() - ms) / 1000);
+  if (secs < 60) return t("time.now");
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return t("time.min", { n: mins });
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return t("time.hour", { n: hours });
+  const days = Math.floor(hours / 24);
+  if (days < 7) return t("time.day", { n: days });
+  return t("time.week", { n: Math.floor(days / 7) });
+}
+
+/* ---------- Built-in starter library (lazy: fetched only on click) ---------- */
+// Stable cache id for a built-in book — matches what saveRecent() stores once
+// the book has been opened, so a downloaded book reopens from IndexedDB.
+function builtinId(book) { return `${book.file}::${book.size}::0`; }
+
+function renderBuiltin() {
+  builtinList.replaceChildren();
+  BUILTIN_BOOKS.forEach((book) => {
     const item = document.createElement("div");
     item.className = "recent-item";
 
@@ -386,15 +511,21 @@ async function refreshRecent() {
 
     const cover = document.createElement("div");
     cover.className = "recent-cover";
-    cover.style.background = coverColor(record.name);
-    cover.append(createTextElement("span", coverLetter(record.name), "recent-letter"));
-    cover.append(createTextElement("span", recentBadge(record.kind), "recent-kind"));
+    if (book.cover) {
+      const img = document.createElement("img");
+      img.src = book.cover; img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+      img.className = "recent-cover-img";
+      cover.append(img);
+    } else {
+      cover.style.background = coverColor(book.title);
+      cover.append(createTextElement("span", coverLetter(book.title), "recent-letter"));
+    }
     open.append(cover);
 
-    open.append(createTextElement("div", record.name, "recent-name"));
-    open.append(createTextElement("div", `${recentBadge(record.kind)} · ${formatBytes(record.size)}${record.data ? "" : " · re-open needed"}`, "recent-meta-line"));
+    open.append(createTextElement("div", book.title, "recent-name"));
+    open.append(createTextElement("div", book.author, "recent-meta-line"));
 
-    const fraction = readingFraction(record.id);
+    const fraction = readingFraction(builtinId(book));
     const bar = document.createElement("div");
     bar.className = "recent-progress";
     const fill = document.createElement("div");
@@ -404,23 +535,40 @@ async function refreshRecent() {
     open.append(bar);
     open.append(createTextElement("div", fraction > 0.01 ? `${Math.round(fraction * 100)}% read` : "Not started", "recent-progress-label"));
 
-    open.addEventListener("click", () => openRecent(record));
-
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "recent-remove";
-    remove.setAttribute("aria-label", `Remove ${record.name}`);
-    remove.textContent = "✕";
-    remove.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      await removeRecent(record.id);
-      localStorage.removeItem(`nyx-prog::${record.id}`);
-      refreshRecent();
-    });
-
-    item.append(open, remove);
-    recentList.append(item);
+    open.addEventListener("click", () => openBuiltin(book, open));
+    item.append(open);
+    builtinList.append(item);
   });
+}
+
+async function openBuiltin(book, button) {
+  // 1) Already downloaded once? Open straight from the local cache — offline,
+  //    no network. This is what makes the others "not download unless chosen".
+  try {
+    const cached = await getRecent(builtinId(book));
+    if (cached?.data) {
+      const file = new File([cached.data], book.file, { type: mimeFor(book.kind), lastModified: 0 });
+      await touchRecent(cached.id);
+      await openFile(file, { fromRecent: true });
+      return;
+    }
+  } catch { /* fall through to fetch */ }
+
+  // 2) First time: fetch this one book only. The browser caches the response,
+  //    and openFile() persists the bytes to IndexedDB for next time.
+  if (button) button.classList.add("loading");
+  try {
+    const response = await fetch(book.url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const file = new File([blob], book.file, { type: mimeFor(book.kind), lastModified: 0 });
+    await openFile(file);
+  } catch (error) {
+    console.warn("Could not open built-in book", error);
+    toast(t("toast.unsupported"));
+  } finally {
+    if (button) button.classList.remove("loading");
+  }
 }
 
 function recentBadge(kind) {
@@ -563,6 +711,22 @@ function zoomBy(factor) {
   if (!currentDocument) return;
   pdfViewer.currentScale = Math.min(Math.max(pdfViewer.currentScale * factor, MIN_SCALE), MAX_SCALE);
 }
+// Map-style zoom: scale by `factor` while keeping the point under the cursor
+// fixed (so the PDF zooms toward wherever you're pointing).
+function zoomAtPointer(event, factor) {
+  const oldScale = pdfViewer.currentScale;
+  const newScale = Math.min(Math.max(oldScale * factor, MIN_SCALE), MAX_SCALE);
+  if (newScale === oldScale) return;
+  const rect = container.getBoundingClientRect();
+  const offsetX = event.clientX - rect.left;
+  const offsetY = event.clientY - rect.top;
+  const contentX = container.scrollLeft + offsetX;
+  const contentY = container.scrollTop + offsetY;
+  const ratio = newScale / oldScale;
+  pdfViewer.currentScale = newScale;          // pdf.js updates page dimensions synchronously
+  container.scrollLeft = contentX * ratio - offsetX;
+  container.scrollTop = contentY * ratio - offsetY;
+}
 // Reflow "zoom" scales the reading text size instead of the page.
 const READ_MIN = 12, READ_MAX = 40;
 function currentReadingSize() {
@@ -576,11 +740,42 @@ function setReadingSize(px) {
   setRangeFill(sizeR);
   localStorage.setItem("nyx-read-size", String(size));
 }
+// PDF zoom is map-style: the wheel / two-finger trackpad scroll zooms toward the
+// cursor (no modifier needed — some browsers, e.g. Firefox on Linux, never tag a
+// trackpad pinch with ctrlKey, so requiring Ctrl made the gesture dead). You pan
+// a zoomed page by dragging it. For reflow text the wheel still scrolls to read,
+// and Ctrl/⌘+wheel nudges the text size.
 container.addEventListener("wheel", (event) => {
-  if (!(event.ctrlKey || event.metaKey)) return;
-  if (viewMode === "pdf" && currentDocument) { event.preventDefault(); zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1); }
-  else if (viewMode === "reflow") { event.preventDefault(); setReadingSize(currentReadingSize() + (event.deltaY < 0 ? 1 : -1)); }
+  if (viewMode === "pdf" && currentDocument) {
+    event.preventDefault();
+    const delta = Math.max(-60, Math.min(60, event.deltaY));
+    zoomAtPointer(event, Math.exp(-delta * 0.0022));
+  } else if (viewMode === "reflow" && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    setReadingSize(currentReadingSize() + (event.deltaY < 0 ? 1 : -1));
+  }
 }, { passive: false });
+
+// Drag to pan the PDF (mouse/trackpad), so a zoomed page is still navigable.
+// Skipped while annotating (text selection is needed there) and for touch
+// (handled by the pinch/scroll touch gestures).
+let panState = null;
+container.addEventListener("pointerdown", (event) => {
+  if (event.pointerType === "touch" || event.button !== 0) return;
+  if (viewMode !== "pdf" || !currentDocument || annotationActive) return;
+  panState = { x: event.clientX, y: event.clientY, left: container.scrollLeft, top: container.scrollTop, moved: false };
+});
+container.addEventListener("pointermove", (event) => {
+  if (!panState) return;
+  const dx = event.clientX - panState.x;
+  const dy = event.clientY - panState.y;
+  if (!panState.moved && Math.hypot(dx, dy) < 3) return;
+  panState.moved = true;
+  container.classList.add("panning");
+  container.scrollLeft = panState.left - dx;
+  container.scrollTop = panState.top - dy;
+});
+window.addEventListener("pointerup", () => { if (panState) { container.classList.remove("panning"); panState = null; } });
 
 spreadButton.addEventListener("click", () => {
   spreadIndex = (spreadIndex + 1) % spreadCycle.length;
@@ -798,9 +993,10 @@ sheet.addEventListener("click", (event) => { if (event.target === sheet) closeSh
 function openAa() { applyReadingMode(); aaPanel.hidden = false; }
 function closeAa() { aaPanel.hidden = true; }
 function aaOpen() { return !aaPanel.hidden; }
-// Show only the controls that apply to the open document (typography vs PDF spread).
+// Show only the controls that apply to the open document (typography vs PDF
+// spread). The guide reflows like a text file, so it gets the typography group.
 function applyReadingMode() {
-  readingGroup.hidden = viewMode !== "reflow";
+  readingGroup.hidden = !(viewMode === "reflow" || guideShown);
   pdfGroup.hidden = viewMode !== "pdf";
 }
 aaBtn.addEventListener("click", () => (aaOpen() ? closeAa() : openAa()));
@@ -828,6 +1024,7 @@ onLangChange(() => {
   refreshDocSub();
   if (currentQuery) findCount.textContent = "";
   if (document.body.dataset.view === "vocab") refreshVocab();
+  if (document.body.dataset.view === "lib") { renderBuiltin(); if (recentItems.length) renderRecentList(); }
 });
 
 /* ---------- Properties & shortcuts ---------- */
@@ -1455,10 +1652,11 @@ function formatPdfDate(value) {
 }
 
 /* ---------- Theme (paper / sepia / night) ---------- */
-const THEMES = ["paper", "sepia", "night"];
+const THEMES = ["paper", "white", "night"];
 function startTheme() {
   const saved = localStorage.getItem("nyx-theme");
   let theme = THEMES.includes(saved) ? saved
+    : saved === "sepia" ? "white"   // the old sepia theme is now "white"
     : saved === "dark" ? "night"
     : saved === "light" ? "paper"
     : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "paper");
@@ -1467,12 +1665,13 @@ function startTheme() {
 function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem("nyx-theme", theme);
-  [...themeSeg.children].forEach((b) => b.classList.toggle("on", b.dataset.theme === theme));
+  // Keep every theme segment (Settings + the Aa panel) in sync.
+  themeSegs.forEach((seg) => [...seg.children].forEach((b) => b.classList.toggle("on", b.dataset.theme === theme)));
 }
-themeSeg.addEventListener("click", (event) => {
+themeSegs.forEach((seg) => seg.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (button) setTheme(button.dataset.theme);
-});
+}));
 
 /* ---------- Reading typography (text formats) ---------- */
 // Paint the accent-filled portion of a slider (the WebKit track has no native
@@ -1526,12 +1725,20 @@ annotationsToggle.addEventListener("click", () => {
   applyAnnotations();
 });
 
-/* ---------- Focus mode + rail (mobile) ---------- */
-focusBtn.addEventListener("click", toggleFocus);
+/* ---------- Focus / fullscreen menu + rail (mobile) ---------- */
+function openFocusMenu() { focusMenu.hidden = false; focusBtn.classList.add("on"); }
+function closeFocusMenu() { focusMenu.hidden = true; focusBtn.classList.remove("on"); }
+function focusMenuOpen() { return !focusMenu.hidden; }
+focusBtn.addEventListener("click", () => (focusMenuOpen() ? closeFocusMenu() : openFocusMenu()));
+menuFocus.addEventListener("click", () => { closeFocusMenu(); toggleFocus(); });
+menuFullscreen.addEventListener("click", () => { closeFocusMenu(); toggleFullscreen(); });
+document.addEventListener("pointerdown", (event) => {
+  if (focusMenuOpen() && !event.target.closest("#focus-menu, #focus-btn")) closeFocusMenu();
+});
+
 focusExit.addEventListener("click", toggleFocus);
 function toggleFocus() {
-  const on = app.classList.toggle("focus");
-  focusBtn.classList.toggle("on", on);
+  app.classList.toggle("focus");
   hidePopover();
 }
 function openRail() { app.classList.add("rail-open"); scrim.classList.add("open"); }
@@ -1540,11 +1747,10 @@ railToggle.addEventListener("click", () => (app.classList.contains("rail-open") 
 scrim.addEventListener("click", closeRail);
 
 /* ---------- Fullscreen ---------- */
-fullscreenButton.addEventListener("click", () => {
-  closeSheet();
+function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen?.().catch((error) => console.error(error));
-});
+}
 document.addEventListener("fullscreenchange", () => {
   fullscreenLabel.textContent = t(document.fullscreenElement ? "set.exitFullscreen" : "set.enterFullscreen");
 });
@@ -1581,6 +1787,7 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape") {
     if (!modal.hidden) { closeModal(); return; }
+    if (focusMenuOpen()) { closeFocusMenu(); return; }
     if (pop.classList.contains("show")) { hidePopover(); return; }
     if (findBar.classList.contains("open")) { closeFind(); return; }
     if (sheetOpen()) { closeSheet(); return; }
@@ -1697,6 +1904,7 @@ applyTriggerUI();
 applyPopoverToggle();
 applyColumns();
 applyAnnotations();
+renderBuiltin();
 refreshRecent();
 showGuide();
 showView("lib");

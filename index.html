@@ -68,7 +68,13 @@
         <header class="topbar">
           <button class="tbtn" id="rail-toggle" data-i18n-title="bar.menu"><svg class="ic"><use href="#i-list" /></svg></button>
           <button class="tbtn reader-only" id="toc-btn" data-i18n-title="bar.contents" hidden><svg class="ic"><use href="#i-toc" /></svg></button>
-          <button class="tbtn reader-only" id="focus-btn" data-i18n-title="bar.focus"><svg class="ic"><use href="#i-expand" /></svg></button>
+          <div class="menu-wrap reader-only">
+            <button class="tbtn" id="focus-btn" data-i18n-title="bar.view"><svg class="ic"><use href="#i-expand" /></svg></button>
+            <div class="mini-menu" id="focus-menu" hidden>
+              <button class="mini-item" id="menu-focus"><svg class="ic"><use href="#i-expand" /></svg><span data-i18n="bar.focusMode">Focus mode</span></button>
+              <button class="mini-item" id="menu-fullscreen"><svg class="ic"><use href="#i-fullscreen" /></svg><span id="fullscreen-label" data-i18n="set.enterFullscreen">Enter fullscreen</span></button>
+            </div>
+          </div>
           <input id="file-input" type="file" accept=".pdf,.txt,.md,.markdown,.epub,.docx,application/pdf,text/plain" hidden />
 
           <div class="title-wrap">
@@ -132,7 +138,12 @@
             </div>
             <div id="recent-files" class="recent-files" hidden>
               <div class="dlabel" data-i18n="lib.recent">Recent</div>
-              <div id="recent-list" class="books"></div>
+              <div id="recent-list" class="rlist"></div>
+              <button class="more-btn" id="recent-more" type="button" hidden></button>
+            </div>
+            <div id="builtin-books" class="recent-files">
+              <div class="dlabel" data-i18n="lib.featured">Read books from Nyx Reader</div>
+              <div id="builtin-list" class="books"></div>
             </div>
           </div>
           </div>
@@ -225,13 +236,13 @@
 
     <!-- Reading controls ("Aa") — no backdrop, so text reflows live as you adjust -->
     <aside class="aa-panel" id="aa-panel" aria-label="Reading" hidden>
-      <div class="aa-head"><span class="aa-title" data-i18n="set.readingTitle">Reading</span><button class="iconbtn" id="aa-x" data-i18n-aria="bar.close"><svg class="ic"><use href="#i-close" /></svg></button></div>
+      <div class="aa-head"><span class="aa-title" data-i18n="set.readingTitle">Reading settings</span><button class="iconbtn" id="aa-x" data-i18n-aria="bar.close"><svg class="ic"><use href="#i-close" /></svg></button></div>
       <div class="aa-body">
         <div class="field">
           <label data-i18n="set.theme">Theme</label>
-          <div class="seg" id="theme-seg">
+          <div class="seg theme-seg">
             <button data-theme="paper"><span class="swatch-sq" style="background:#fbf8f2"></span><span data-i18n="set.paper">Paper</span></button>
-            <button data-theme="sepia"><span class="swatch-sq" style="background:#f4ecd9"></span><span data-i18n="set.sepia">Sepia</span></button>
+            <button data-theme="white"><span class="swatch-sq" style="background:#ffffff"></span><span data-i18n="set.white">White</span></button>
             <button data-theme="night"><span class="swatch-sq" style="background:#15181c"></span><span data-i18n="set.night">Night</span></button>
           </div>
         </div>
@@ -278,6 +289,15 @@
           </div>
 
           <div class="field">
+            <label data-i18n="set.theme">Theme</label>
+            <div class="seg theme-seg">
+              <button data-theme="paper"><span class="swatch-sq" style="background:#fbf8f2"></span><span data-i18n="set.paper">Paper</span></button>
+              <button data-theme="white"><span class="swatch-sq" style="background:#ffffff"></span><span data-i18n="set.white">White</span></button>
+              <button data-theme="night"><span class="swatch-sq" style="background:#15181c"></span><span data-i18n="set.night">Night</span></button>
+            </div>
+          </div>
+
+          <div class="field">
             <label data-i18n="set.lookupOn">Look up a word on</label>
             <div class="seg" id="trigger-seg">
               <button data-trig="single" class="on" data-i18n="set.singleTap">Single tap</button>
@@ -299,7 +319,6 @@
           <div class="sheet-group">
             <div class="dlabel" data-i18n="set.document">Document</div>
             <div class="field stackbtns">
-              <button class="rowbtn" id="fullscreen"><svg class="ic"><use href="#i-fullscreen" /></svg><span id="fullscreen-label" data-i18n="set.enterFullscreen">Enter fullscreen</span></button>
               <button class="rowbtn" id="properties"><svg class="ic"><use href="#i-info" /></svg><span data-i18n="set.properties">Document properties</span></button>
               <button class="rowbtn" id="shortcuts"><svg class="ic"><use href="#i-keyboard" /></svg><span data-i18n="set.shortcuts">Keyboard shortcuts</span></button>
             </div>
