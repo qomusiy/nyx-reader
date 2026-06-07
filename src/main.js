@@ -14,6 +14,7 @@ import { saveRecent, listRecent, touchRecent, removeRecent, fileId } from "./rec
 import { readText, readDocx, readEpub } from "./readers/reflow.js";
 import { saveVocab, removeVocab, listVocab, hasVocab, getHighlights, setHighlights } from "./store.js";
 import { GUIDE_HTML } from "./welcome.js";
+import { t, getLang, setLang, applyI18n, onLangChange } from "./i18n.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 const { AnnotationEditorType, AnnotationEditorParamsType } = pdfjsLib;
@@ -78,6 +79,12 @@ const tocX = $("#toc-x");
 const scrim = $("#scrim");
 const sheet = $("#sheet");
 const sheetX = $("#sheet-x");
+const aaBtn = $("#aa-btn");
+const aaPanel = $("#aa-panel");
+const aaX = $("#aa-x");
+const readingGroup = $("#reading-group");
+const pdfGroup = $("#pdf-group");
+const langSeg = $("#lang-seg");
 const themeSeg = $("#theme-seg");
 const fontSel = $("#font-sel");
 const sizeR = $("#size-r");
@@ -108,6 +115,8 @@ const popGloss = $("#pop-gloss");
 const popMore = $("#pop-more");
 const popAudio = $("#pop-audio");
 const popSave = $("#pop-save");
+const popClose = $("#pop-close");
+const focusExit = $("#focus-exit");
 const triggerSeg = $("#trigger-seg");
 
 const toastEl = $("#toast");
@@ -150,7 +159,7 @@ let triggerMode = localStorage.getItem("nyx-trigger") === "double" ? "double" : 
 
 const DEFAULT_HIGHLIGHT = "#fff066";
 const spreadCycle = [SpreadMode.NONE, SpreadMode.ODD, SpreadMode.EVEN];
-const spreadLabels = ["Off", "Odd left", "Even left"];
+const SPREAD_KEYS = ["spread.off", "spread.odd", "spread.even"];
 let spreadIndex = 0;
 let currentQuery = "";
 
@@ -165,7 +174,7 @@ function showView(name) {
   document.body.dataset.view = name;
   railNav.forEach((b) => b.classList.toggle("on", b.dataset.nav === name));
   hidePopover();
-  if (name !== "read") { closeFind(); closeDict(); closeToc(); closeNoteEditor(); }
+  if (name !== "read") { closeFind(); closeDict(); closeToc(); closeNoteEditor(); closeAa(); }
 }
 railNav.forEach((b) => b.addEventListener("click", () => {
   closeRail();
@@ -214,7 +223,7 @@ function mimeFor(kind) {
 
 async function openFile(file, { fromRecent = false } = {}) {
   const kind = detectKind(file);
-  if (!kind) { toast("Unsupported file type"); return; }
+  if (!kind) { toast(t("toast.unsupported")); return; }
   closeRail();
   if (kind === "pdf") await openPdf(file, fromRecent);
   else await openReflow(file, kind, fromRecent);
@@ -240,7 +249,7 @@ async function closeCurrent() {
 
 async function openPdf(file, fromRecent = false) {
   docTitle.textContent = file.name;
-  docSub.textContent = "Opening…";
+  docSub.textContent = t("doc.opening");
   closeFind();
   showView("read");
 
@@ -269,13 +278,13 @@ async function openPdf(file, fromRecent = false) {
     refreshRecent();
   } catch (error) {
     console.error(error);
-    failOpen("This PDF could not be opened");
+    failOpen(t("toast.pdfOpenFail"));
   }
 }
 
 async function openReflow(file, kind, fromRecent = false) {
   docTitle.textContent = file.name;
-  docSub.textContent = "Opening…";
+  docSub.textContent = t("doc.opening");
   closeFind();
   showView("read");
 
@@ -302,7 +311,7 @@ async function openReflow(file, kind, fromRecent = false) {
     // Highlighting + notes work on reflow text too.
     toolNote.style.display = "";
     annotationTools.hidden = !annotationsEnabled;
-    findButton.hidden = true;
+    findButton.hidden = false;
     docSub.textContent = readerLabel(kind);
 
     reflowHighlights = await getHighlights(currentFileId);
@@ -314,12 +323,23 @@ async function openReflow(file, kind, fromRecent = false) {
     refreshRecent();
   } catch (error) {
     console.error(error);
-    failOpen("This file could not be opened");
+    failOpen(t("toast.fileOpenFail"));
   }
 }
 
 function readerLabel(kind) {
-  return kind === "epub" ? "EPUB document" : kind === "docx" ? "Word document" : "Text document";
+  return t(kind === "epub" ? "doc.epub" : kind === "docx" ? "doc.docx" : "doc.text");
+}
+// Re-derive the header subtitle from current state (used on language change too).
+function refreshDocSub() {
+  if (viewMode === "pdf" && currentDocument) {
+    const n = currentDocument.numPages;
+    docSub.textContent = getLang() === "en" && n === 1 ? "1 page" : t("doc.pages", { n });
+  } else if (viewMode === "reflow") {
+    docSub.textContent = readerLabel(currentKind);
+  } else if (viewMode === "none") {
+    docSub.textContent = t("doc.openToBegin");
+  }
 }
 
 function failOpen(message) {
@@ -438,7 +458,9 @@ function restoreReadingProgress() {
 /* ---------- Vocabulary view ---------- */
 async function refreshVocab() {
   const items = await listVocab();
-  vocabCount.textContent = items.length ? `${items.length} word${items.length > 1 ? "s" : ""}` : "";
+  vocabCount.textContent = items.length
+    ? (getLang() === "en" && items.length === 1 ? "1 word" : t("vocab.count", { n: items.length }))
+    : "";
   vocabListEl.replaceChildren();
   vocabEmpty.hidden = items.length > 0;
   items.forEach((record) => {
@@ -453,7 +475,7 @@ async function refreshVocab() {
     row.append(body);
     const x = document.createElement("button");
     x.className = "vocab-x";
-    x.setAttribute("aria-label", `Remove ${record.word}`);
+    x.setAttribute("aria-label", t("vocab.remove", { word: record.word }));
     x.innerHTML = `<svg class="ic" style="width:18px;height:18px"><use href="#i-trash" /></svg>`;
     x.addEventListener("click", async () => { await removeVocab(record.word); refreshVocab(); reflectSaveState(); });
     row.append(x);
@@ -462,7 +484,7 @@ async function refreshVocab() {
 }
 vocabExport.addEventListener("click", async () => {
   const items = await listVocab();
-  if (!items.length) { toast("No words to export"); return; }
+  if (!items.length) { toast(t("toast.noExport")); return; }
   const esc = (s) => `"${String(s || "").replace(/"/g, '""')}"`;
   let csv = "Word,Translation,Context,Source\n";
   items.forEach((r) => { csv += [esc(r.word), esc(r.translation), esc(r.context), esc(r.source)].join(",") + "\n"; });
@@ -472,7 +494,7 @@ vocabExport.addEventListener("click", async () => {
   a.download = "nyx-vocabulary.csv";
   a.click();
   URL.revokeObjectURL(url);
-  toast(`Exported ${items.length} words`);
+  toast(t("toast.exported", { n: items.length }));
 });
 
 /* ---------- Lookup trigger setting ---------- */
@@ -489,7 +511,7 @@ triggerSeg.addEventListener("click", (event) => {
 let alwaysPopover = localStorage.getItem("nyx-pop-both") === "on";
 const popoverToggle = $("#toggle-popover");
 const popoverState = $("#popover-state");
-function applyPopoverToggle() { popoverState.textContent = alwaysPopover ? "On" : "Off"; popoverToggle.classList.toggle("on", alwaysPopover); }
+function applyPopoverToggle() { popoverState.textContent = t(alwaysPopover ? "state.on" : "state.off"); popoverToggle.classList.toggle("on", alwaysPopover); }
 popoverToggle.addEventListener("click", () => {
   alwaysPopover = !alwaysPopover;
   localStorage.setItem("nyx-pop-both", alwaysPopover ? "on" : "off");
@@ -501,7 +523,7 @@ const columnsToggle = $("#toggle-columns");
 const columnsState = $("#columns-state");
 function applyColumns() {
   document.body.classList.toggle("reflow-columns", columnsOn);
-  columnsState.textContent = columnsOn ? "On" : "Off";
+  columnsState.textContent = t(columnsOn ? "state.on" : "state.off");
   columnsToggle.classList.toggle("on", columnsOn);
 }
 columnsToggle.addEventListener("click", () => {
@@ -512,7 +534,7 @@ columnsToggle.addEventListener("click", () => {
 
 async function openRecent(record) {
   if (!record.data) {
-    toast("This file is too large to remember — please choose it again");
+    toast(t("toast.tooLarge"));
     fileInput.click();
     return;
   }
@@ -525,8 +547,7 @@ async function openRecent(record) {
 eventBus.on("pagesinit", () => {
   if (!currentDocument) return;
   pdfViewer.currentScaleValue = "page-width";
-  const pageWord = currentDocument.numPages === 1 ? "page" : "pages";
-  docSub.textContent = `${currentDocument.numPages} ${pageWord}`;
+  refreshDocSub();
   setTool("select");
   setHighlightColor(DEFAULT_HIGHLIGHT);
   buildTOC();
@@ -543,7 +564,7 @@ function zoomBy(factor) {
   pdfViewer.currentScale = Math.min(Math.max(pdfViewer.currentScale * factor, MIN_SCALE), MAX_SCALE);
 }
 // Reflow "zoom" scales the reading text size instead of the page.
-const READ_MIN = 14, READ_MAX = 30;
+const READ_MIN = 12, READ_MAX = 40;
 function currentReadingSize() {
   return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--reading-size")) || 19;
 }
@@ -552,6 +573,7 @@ function setReadingSize(px) {
   document.documentElement.style.setProperty("--reading-size", `${size}px`);
   sizeR.value = String(size);
   sizeVal.textContent = `${size}px`;
+  setRangeFill(sizeR);
   localStorage.setItem("nyx-read-size", String(size));
 }
 container.addEventListener("wheel", (event) => {
@@ -563,7 +585,7 @@ container.addEventListener("wheel", (event) => {
 spreadButton.addEventListener("click", () => {
   spreadIndex = (spreadIndex + 1) % spreadCycle.length;
   pdfViewer.spreadMode = spreadCycle[spreadIndex];
-  spreadState.textContent = spreadLabels[spreadIndex];
+  spreadState.textContent = t(SPREAD_KEYS[spreadIndex]);
 });
 
 /* ---------- Annotation tools ---------- */
@@ -654,6 +676,8 @@ function renderReflowHighlights() {
   if (!reflowCleanHTML) return;
   docReader.innerHTML = reflowCleanHTML;
   for (const hl of [...reflowHighlights].sort((a, b) => a.start - b.start)) wrapReflowRange(hl);
+  // Rebuilding the DOM detaches any live find ranges — re-run the search to rebind.
+  if (findBar.classList.contains("open") && currentQuery && viewMode === "reflow") runReflowFind(currentQuery, "");
 }
 function wrapReflowRange(hl) {
   const { start, end, color, note } = hl;
@@ -755,42 +779,80 @@ savePdfButton.addEventListener("click", async () => {
     link.download = `${currentDocName.replace(/\.pdf$/i, "") || "document"} (annotated).pdf`;
     link.click();
     URL.revokeObjectURL(url);
-    toast("Saved annotated copy");
+    toast(t("toast.savedCopy"));
   } catch (error) {
     console.error(error);
-    toast("Could not save the document");
+    toast(t("toast.saveFailed"));
   }
 });
 
-/* ---------- Settings sheet ---------- */
-function openSheet() { sheet.classList.add("open"); scrim.classList.add("open"); }
-function closeSheet() { sheet.classList.remove("open"); scrim.classList.remove("open"); }
+/* ---------- Settings (centered modal) ---------- */
+function openSheet() { sheet.hidden = false; }
+function closeSheet() { sheet.hidden = true; }
+function sheetOpen() { return !sheet.hidden; }
 gearBtn.addEventListener("click", openSheet);
 sheetX.addEventListener("click", closeSheet);
+sheet.addEventListener("click", (event) => { if (event.target === sheet) closeSheet(); });
+
+/* ---------- Reading controls ("Aa") — no backdrop, live preview ---------- */
+function openAa() { applyReadingMode(); aaPanel.hidden = false; }
+function closeAa() { aaPanel.hidden = true; }
+function aaOpen() { return !aaPanel.hidden; }
+// Show only the controls that apply to the open document (typography vs PDF spread).
+function applyReadingMode() {
+  readingGroup.hidden = viewMode !== "reflow";
+  pdfGroup.hidden = viewMode !== "pdf";
+}
+aaBtn.addEventListener("click", () => (aaOpen() ? closeAa() : openAa()));
+aaX.addEventListener("click", closeAa);
+// Light dismiss: any click outside the panel or its button closes it.
+document.addEventListener("pointerdown", (event) => {
+  if (aaOpen() && !event.target.closest("#aa-panel, #aa-btn")) closeAa();
+});
+
+/* ---------- Language ---------- */
+function applyLangUI() { [...langSeg.children].forEach((b) => b.classList.toggle("on", b.dataset.lang === getLang())); }
+langSeg.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (button) setLang(button.dataset.lang);
+});
+// When the language changes, re-render every dynamic string we control.
+onLangChange(() => {
+  applyLangUI();
+  applyPopoverToggle();
+  applyColumns();
+  applyAnnotations();
+  applyTriggerUI();
+  spreadState.textContent = t(SPREAD_KEYS[spreadIndex]);
+  fullscreenLabel.textContent = t(document.fullscreenElement ? "set.exitFullscreen" : "set.enterFullscreen");
+  refreshDocSub();
+  if (currentQuery) findCount.textContent = "";
+  if (document.body.dataset.view === "vocab") refreshVocab();
+});
 
 /* ---------- Properties & shortcuts ---------- */
 propertiesButton.addEventListener("click", async () => {
   closeSheet();
-  if (viewMode === "none") { toast("Open a document first"); return; }
+  if (viewMode === "none") { toast(t("toast.openFirst")); return; }
   let rows;
   if (viewMode === "pdf" && currentDocument) {
     const { info = {} } = await currentDocument.getMetadata();
     rows = [
-      ["Title", info.Title], ["Author", info.Author], ["Subject", info.Subject],
-      ["Keywords", info.Keywords], ["Creator", info.Creator], ["Producer", info.Producer],
-      ["PDF version", info.PDFFormatVersion], ["Pages", String(currentDocument.numPages)],
-      ["File size", formatBytes(currentFileSize)], ["Created", formatPdfDate(info.CreationDate)],
-      ["Modified", formatPdfDate(info.ModDate)],
+      [t("prop.title"), info.Title], [t("prop.author"), info.Author], [t("prop.subject"), info.Subject],
+      [t("prop.keywords"), info.Keywords], [t("prop.creator"), info.Creator], [t("prop.producer"), info.Producer],
+      [t("prop.pdfVersion"), info.PDFFormatVersion], [t("prop.pages"), String(currentDocument.numPages)],
+      [t("prop.fileSize"), formatBytes(currentFileSize)], [t("prop.created"), formatPdfDate(info.CreationDate)],
+      [t("prop.modified"), formatPdfDate(info.ModDate)],
     ];
   } else {
     const text = docReader.textContent || "";
     const words = (text.trim().match(/\S+/g) || []).length;
     rows = [
-      ["Name", currentDocName],
-      ["Format", readerLabel(currentKind)],
-      ["File size", formatBytes(currentFileSize)],
-      ["Words", words.toLocaleString()],
-      ["Characters", text.length.toLocaleString()],
+      [t("prop.name"), currentDocName],
+      [t("prop.format"), readerLabel(currentKind)],
+      [t("prop.fileSize"), formatBytes(currentFileSize)],
+      [t("prop.words"), words.toLocaleString()],
+      [t("prop.characters"), text.length.toLocaleString()],
     ];
   }
   const fragment = document.createDocumentFragment();
@@ -802,15 +864,15 @@ propertiesButton.addEventListener("click", async () => {
     row.append(createTextElement("span", String(value), "prop-val"));
     fragment.append(row);
   });
-  openModal("Document properties", fragment);
+  openModal(t("set.properties"), fragment);
 });
 
 shortcutsButton.addEventListener("click", () => {
   closeSheet();
   const shortcuts = [
-    ["Find in document", "Ctrl / ⌘ + F"], ["Focus mode", "F"], ["Close / dialog", "Esc"],
-    ["Look up a word", "Double-click / tap"], ["Zoom in / out", "Ctrl / ⌘ + +  /  −"],
-    ["Fit width", "Ctrl / ⌘ + 0"], ["Previous / next page", "← / →"],
+    [t("sc.find"), t("sc.findKeys")], [t("sc.focus"), t("sc.focusKeys")], [t("sc.close"), t("sc.closeKeys")],
+    [t("sc.lookup"), t("sc.lookupKeys")], [t("sc.zoom"), t("sc.zoomKeys")],
+    [t("sc.fit"), t("sc.fitKeys")], [t("sc.paging"), t("sc.pagingKeys")],
   ];
   const fragment = document.createDocumentFragment();
   shortcuts.forEach(([label, keys]) => {
@@ -820,7 +882,7 @@ shortcutsButton.addEventListener("click", () => {
     row.append(createTextElement("span", keys, "kbd"));
     fragment.append(row);
   });
-  openModal("Keyboard shortcuts", fragment);
+  openModal(t("set.shortcuts"), fragment);
 });
 
 function openModal(title, bodyNode) { modalTitle.textContent = title; modalBody.replaceChildren(bodyNode); modal.hidden = false; }
@@ -839,7 +901,7 @@ findPrev.addEventListener("click", () => runFind(currentQuery || findInput.value
 findNext.addEventListener("click", () => runFind(currentQuery || findInput.value, "again", false));
 
 function openFind() {
-  if (!currentDocument) return;
+  if (viewMode === "none") return;
   findBar.classList.add("open");
   findButton.classList.add("on");
   findInput.focus();
@@ -850,10 +912,14 @@ function closeFind() {
   findButton.classList.remove("on");
   currentQuery = "";
   findCount.textContent = "";
+  clearReflowFind();
   eventBus.dispatch("find", { source: window, type: "", query: "", caseSensitive: false, entireWord: false, highlightAll: true, findPrevious: false });
 }
 function runFind(query, type, findPrevious = false) {
   currentQuery = query;
+  // Reflow formats (TXT/MD/EPUB/DOCX) have no pdf.js find controller — search the
+  // rendered text directly with the CSS Custom Highlight API instead.
+  if (viewMode === "reflow") { runReflowFind(query, type, findPrevious); return; }
   if (!query) findCount.textContent = "";
   eventBus.dispatch("find", { source: window, type, query, caseSensitive: false, entireWord: false, highlightAll: true, findPrevious });
 }
@@ -861,8 +927,75 @@ eventBus.on("updatefindcontrolstate", ({ matchesCount }) => renderFindCount(matc
 eventBus.on("updatefindmatchescount", ({ matchesCount }) => renderFindCount(matchesCount));
 function renderFindCount(matchesCount) {
   if (!currentQuery) { findCount.textContent = ""; return; }
-  if (!matchesCount || !matchesCount.total) { findCount.textContent = "No results"; return; }
-  findCount.textContent = `${matchesCount.current} of ${matchesCount.total}`;
+  if (!matchesCount || !matchesCount.total) { findCount.textContent = t("find.none"); return; }
+  findCount.textContent = t("find.count", { current: matchesCount.current, total: matchesCount.total });
+}
+
+/* ---------- In-document find for reflow formats (Custom Highlight API) ---------- */
+let reflowMatches = [];      // Range[] for every occurrence of the query
+let reflowMatchIndex = -1;   // which one is "current"
+let findAllHL = null, findCurrentHL = null;
+function ensureFindHighlights() {
+  if (findAllHL) return;
+  findAllHL = new Highlight();
+  findCurrentHL = new Highlight();
+  CSS.highlights.set("find-all", findAllHL);
+  CSS.highlights.set("find-current", findCurrentHL);
+}
+function buildReflowMatches(query) {
+  const matches = [];
+  const needle = query.toLowerCase();
+  for (const node of reflowTextNodes()) {
+    const hay = node.textContent.toLowerCase();
+    let from = 0, idx;
+    while ((idx = hay.indexOf(needle, from)) !== -1) {
+      const range = document.createRange();
+      range.setStart(node, idx);
+      range.setEnd(node, idx + needle.length);
+      matches.push(range);
+      from = idx + needle.length;
+    }
+  }
+  return matches;
+}
+function runReflowFind(query, type, findPrevious = false) {
+  if (!query) { clearReflowFind(); return; }
+  ensureFindHighlights();
+  if (type === "again" && reflowMatches.length) {
+    const n = reflowMatches.length;
+    reflowMatchIndex = findPrevious ? (reflowMatchIndex - 1 + n) % n : (reflowMatchIndex + 1) % n;
+  } else {
+    reflowMatches = buildReflowMatches(query);
+    reflowMatchIndex = reflowMatches.length ? 0 : -1;
+  }
+  findAllHL.clear();
+  findCurrentHL.clear();
+  reflowMatches.forEach((range, i) => { if (i !== reflowMatchIndex) findAllHL.add(range); });
+  if (reflowMatchIndex >= 0) {
+    const current = reflowMatches[reflowMatchIndex];
+    findCurrentHL.add(current);
+    scrollRangeIntoView(current);
+  }
+  renderReflowFindCount();
+}
+function renderReflowFindCount() {
+  if (!currentQuery) { findCount.textContent = ""; return; }
+  if (!reflowMatches.length) { findCount.textContent = t("find.none"); return; }
+  findCount.textContent = t("find.count", { current: reflowMatchIndex + 1, total: reflowMatches.length });
+}
+function clearReflowFind() {
+  reflowMatches = [];
+  reflowMatchIndex = -1;
+  if (findAllHL) findAllHL.clear();
+  if (findCurrentHL) findCurrentHL.clear();
+  findCount.textContent = "";
+}
+function scrollRangeIntoView(range) {
+  const rect = range.getBoundingClientRect();
+  const view = container.getBoundingClientRect();
+  if (rect.top < view.top + 60 || rect.bottom > view.bottom - 60) {
+    container.scrollTop += rect.top - view.top - view.height / 3;
+  }
 }
 
 /* ---------- Contents (TOC) ---------- */
@@ -1070,8 +1203,8 @@ async function lookup(rawWord, anchorRect = null, context = "") {
     reflectSaveState();
   } catch (error) {
     console.error(error);
-    showDictionaryMessage("Could not reach the dictionary. Check your connection and try again.", "error");
-    if (usePopover) { popGloss.textContent = "Could not reach the dictionary."; popMore.hidden = true; }
+    showDictionaryMessage(t("dict.error"), "error");
+    if (usePopover) { popGloss.textContent = t("dict.error"); popMore.hidden = true; }
   }
 }
 
@@ -1093,8 +1226,8 @@ function buildVocabRecord() {
 async function toggleSaveCurrent() {
   if (!currentLookup) return;
   const word = currentLookup.word;
-  if (await hasVocab(word)) { await removeVocab(word); toast(`Removed “${word}”`); }
-  else { await saveVocab(buildVocabRecord()); toast(`Saved “${word}”`); }
+  if (await hasVocab(word)) { await removeVocab(word); toast(t("toast.removedWord", { word })); }
+  else { await saveVocab(buildVocabRecord()); toast(t("toast.savedWord", { word })); }
   reflectSaveState();
 }
 async function reflectSaveState() {
@@ -1106,7 +1239,7 @@ async function reflectSaveState() {
   if (chip) {
     chip.classList.toggle("on", saved);
     chip.querySelector("use").setAttribute("href", saved ? "#i-check" : "#i-bookmark");
-    chip.querySelector("span").textContent = saved ? "Saved" : "Save";
+    chip.querySelector("span").textContent = t(saved ? "dict.saved" : "dict.save");
   }
 }
 popSave.addEventListener("click", toggleSaveCurrent);
@@ -1125,7 +1258,7 @@ function placePopover(rect) { placeFloating(pop, rect, 256); }
 function showPopoverLoading(word, rect) {
   popWord.textContent = word;
   popPh.textContent = "";
-  popGloss.textContent = "Searching…";
+  popGloss.textContent = t("dict.searching");
   popMore.hidden = true;
   placePopover(rect);
   pop.classList.add("show");
@@ -1135,13 +1268,14 @@ function fillPopover(word, rows, rect) {
   popWord.textContent = word;
   popPh.textContent = first?.pronunciation || (first?.word_class ? `· ${first.word_class}` : "");
   const sense = first?.senses?.[0];
-  popGloss.textContent = sense ? sense.translations.join(", ") : "No entry found.";
+  popGloss.textContent = sense ? sense.translations.join(", ") : t("dict.notFound");
   popMore.hidden = !rows || rows.length === 0;
   placePopover(rect);
   pop.classList.add("show");
 }
 function hidePopover() { pop.classList.remove("show"); }
 popMore.addEventListener("click", () => { openDict(); hidePopover(); });
+popClose.addEventListener("click", hidePopover);
 popAudio.addEventListener("click", () => speak(popWord.textContent));
 container.addEventListener("scroll", () => { hidePopover(); closeNoteEditor(); });
 document.addEventListener("click", (event) => {
@@ -1152,7 +1286,7 @@ document.addEventListener("click", (event) => {
 /* ---------- Dictionary rendering (rich API result) ---------- */
 function renderDictionaryResult(word, groups) {
   dictionaryContent.replaceChildren();
-  if (!groups || groups.length === 0) { showDictionaryMessage("Word not found."); return; }
+  if (!groups || groups.length === 0) { showDictionaryMessage(t("dict.notFound")); return; }
 
   const head = document.createElement("div");
   head.className = "result-head";
@@ -1168,12 +1302,12 @@ function renderDictionaryResult(word, groups) {
   saveChip.type = "button";
   saveChip.id = "dict-save";
   saveChip.className = "dict-chip";
-  saveChip.innerHTML = `<svg class="ic"><use href="#i-bookmark" /></svg><span>Save</span>`;
+  saveChip.innerHTML = `<svg class="ic"><use href="#i-bookmark" /></svg><span>${t("dict.save")}</span>`;
   saveChip.addEventListener("click", toggleSaveCurrent);
   const listenChip = document.createElement("button");
   listenChip.type = "button";
   listenChip.className = "dict-chip";
-  listenChip.innerHTML = `<svg class="ic"><use href="#i-volume" /></svg><span>Listen</span>`;
+  listenChip.innerHTML = `<svg class="ic"><use href="#i-volume" /></svg><span>${t("dict.listen")}</span>`;
   listenChip.addEventListener("click", () => speak(word));
   actions.append(saveChip, listenChip);
   dictionaryContent.append(actions);
@@ -1291,7 +1425,7 @@ function showDictionaryLoading() {
   wrap.className = "dictionary-loading";
   const spinner = document.createElement("div");
   spinner.className = "spinner";
-  wrap.append(spinner, createTextElement("span", "Searching…"));
+  wrap.append(spinner, createTextElement("span", t("dict.searching")));
   dictionaryContent.append(wrap);
 }
 
@@ -1341,6 +1475,13 @@ themeSeg.addEventListener("click", (event) => {
 });
 
 /* ---------- Reading typography (text formats) ---------- */
+// Paint the accent-filled portion of a slider (the WebKit track has no native
+// progress fill — Firefox uses ::-moz-range-progress automatically).
+function setRangeFill(el) {
+  const min = +el.min, max = +el.max;
+  const pct = max > min ? ((+el.value - min) / (max - min)) * 100 : 0;
+  el.style.setProperty("--fill", `${pct}%`);
+}
 function startTypography() {
   const root = document.documentElement.style;
   const font = localStorage.getItem("nyx-read-font");
@@ -1351,6 +1492,7 @@ function startTypography() {
   if (size) { root.setProperty("--reading-size", `${size}px`); sizeR.value = size; sizeVal.textContent = `${size}px`; }
   if (lead) { root.setProperty("--reading-leading", lead); leadR.value = lead; leadVal.textContent = lead; }
   if (meas) { root.setProperty("--reading-measure", `${meas}rem`); measR.value = meas; measVal.textContent = `${meas}rem`; }
+  [sizeR, leadR, measR].forEach(setRangeFill);
 }
 fontSel.addEventListener("change", function () {
   document.documentElement.style.setProperty("--reading-font", this.value);
@@ -1358,22 +1500,22 @@ fontSel.addEventListener("change", function () {
 });
 sizeR.addEventListener("input", function () {
   document.documentElement.style.setProperty("--reading-size", `${this.value}px`);
-  sizeVal.textContent = `${this.value}px`; localStorage.setItem("nyx-read-size", this.value); updateProgress();
+  sizeVal.textContent = `${this.value}px`; localStorage.setItem("nyx-read-size", this.value); setRangeFill(this); updateProgress();
 });
 leadR.addEventListener("input", function () {
   const v = (+this.value).toFixed(2);
   document.documentElement.style.setProperty("--reading-leading", v);
-  leadVal.textContent = v; localStorage.setItem("nyx-read-lead", v); updateProgress();
+  leadVal.textContent = v; localStorage.setItem("nyx-read-lead", v); setRangeFill(this); updateProgress();
 });
 measR.addEventListener("input", function () {
   document.documentElement.style.setProperty("--reading-measure", `${this.value}rem`);
-  measVal.textContent = `${this.value}rem`; localStorage.setItem("nyx-read-meas", this.value); updateProgress();
+  measVal.textContent = `${this.value}rem`; localStorage.setItem("nyx-read-meas", this.value); setRangeFill(this); updateProgress();
 });
 
 /* ---------- Annotation tools on/off ---------- */
 let annotationsEnabled = localStorage.getItem("nyx-annotations") !== "off";
 function applyAnnotations() {
-  annotState.textContent = annotationsEnabled ? "On" : "Off";
+  annotState.textContent = t(annotationsEnabled ? "state.on" : "state.off");
   annotationsToggle.classList.toggle("on", annotationsEnabled);
   if (viewMode === "pdf") annotationTools.hidden = !annotationsEnabled;
   if (!annotationsEnabled) setTool("select");
@@ -1386,15 +1528,16 @@ annotationsToggle.addEventListener("click", () => {
 
 /* ---------- Focus mode + rail (mobile) ---------- */
 focusBtn.addEventListener("click", toggleFocus);
+focusExit.addEventListener("click", toggleFocus);
 function toggleFocus() {
   const on = app.classList.toggle("focus");
   focusBtn.classList.toggle("on", on);
   hidePopover();
 }
 function openRail() { app.classList.add("rail-open"); scrim.classList.add("open"); }
-function closeRail() { app.classList.remove("rail-open"); if (!sheet.classList.contains("open")) scrim.classList.remove("open"); }
+function closeRail() { app.classList.remove("rail-open"); scrim.classList.remove("open"); }
 railToggle.addEventListener("click", () => (app.classList.contains("rail-open") ? closeRail() : openRail()));
-scrim.addEventListener("click", () => { closeSheet(); closeRail(); });
+scrim.addEventListener("click", closeRail);
 
 /* ---------- Fullscreen ---------- */
 fullscreenButton.addEventListener("click", () => {
@@ -1403,7 +1546,7 @@ fullscreenButton.addEventListener("click", () => {
   else document.documentElement.requestFullscreen?.().catch((error) => console.error(error));
 });
 document.addEventListener("fullscreenchange", () => {
-  fullscreenLabel.textContent = document.fullscreenElement ? "Exit fullscreen" : "Enter fullscreen";
+  fullscreenLabel.textContent = t(document.fullscreenElement ? "set.exitFullscreen" : "set.enterFullscreen");
 });
 
 /* ---------- Speech + toast ---------- */
@@ -1413,7 +1556,7 @@ function speak(text) {
     utter.lang = "en-GB"; utter.rate = 0.92;
     speechSynthesis.cancel();
     speechSynthesis.speak(utter);
-  } catch { toast("Audio unavailable"); }
+  } catch { toast(t("toast.audioUnavailable")); }
 }
 let toastTimer = null;
 function toast(message) {
@@ -1426,7 +1569,7 @@ function toast(message) {
 /* ---------- Global keys ---------- */
 document.addEventListener("keydown", (event) => {
   const typing = event.target.tagName === "INPUT" || event.target.tagName === "SELECT" || event.target.isContentEditable;
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f" && currentDocument) { event.preventDefault(); openFind(); return; }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f" && viewMode !== "none") { event.preventDefault(); openFind(); return; }
   if ((event.ctrlKey || event.metaKey) && currentDocument) {
     if (event.key === "=" || event.key === "+") { event.preventDefault(); zoomBy(1.1); return; }
     if (event.key === "-") { event.preventDefault(); zoomBy(1 / 1.1); return; }
@@ -1440,7 +1583,8 @@ document.addEventListener("keydown", (event) => {
     if (!modal.hidden) { closeModal(); return; }
     if (pop.classList.contains("show")) { hidePopover(); return; }
     if (findBar.classList.contains("open")) { closeFind(); return; }
-    if (sheet.classList.contains("open")) { closeSheet(); return; }
+    if (sheetOpen()) { closeSheet(); return; }
+    if (aaOpen()) { closeAa(); return; }
     if (dict.classList.contains("open")) { closeDict(); return; }
     if (toc.classList.contains("open")) { closeToc(); return; }
     if (app.classList.contains("rail-open")) { closeRail(); return; }
@@ -1544,6 +1688,9 @@ container.addEventListener("touchend", (event) => { if (event.touches.length < 2
 mobileMedia.addEventListener("change", () => { if (!isMobile()) closeRail(); });
 
 /* ---------- Init ---------- */
+document.documentElement.lang = getLang();
+applyI18n(document);
+applyLangUI();
 startTheme();
 startTypography();
 applyTriggerUI();

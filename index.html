@@ -46,40 +46,45 @@
       <symbol id="i-cards" viewBox="0 0 24 24"><rect x="3.5" y="8" width="12" height="12" rx="2"/><path d="M8 5.5h9a2 2 0 0 1 2 2V16"/></symbol>
       <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-3.6L6 20V5a1 1 0 0 1 1-1z"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><polyline points="5,12.5 10,17.5 19,7"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-toc" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.6" cy="6" r="1.1"/><circle cx="4.6" cy="12" r="1.1"/><circle cx="4.6" cy="18" r="1.1"/></symbol>
     </svg>
 
     <div class="app" id="app">
       <!-- Left rail -->
       <nav class="rail" aria-label="Primary">
-        <button class="rail-btn" id="open-btn" aria-label="Open file"><svg class="ic"><use href="#i-plus" /></svg><span class="rail-lbl">Open</span></button>
-        <button class="rail-btn on" data-nav="read" aria-label="Reader"><svg class="ic"><use href="#i-book" /></svg><span class="rail-lbl">Reader</span></button>
-        <button class="rail-btn" data-nav="lib" aria-label="Library"><svg class="ic"><use href="#i-grid" /></svg><span class="rail-lbl">Library</span></button>
-        <button class="rail-btn" data-nav="vocab" aria-label="Vocabulary"><svg class="ic"><use href="#i-cards" /></svg><span class="rail-lbl">Vocab</span></button>
+        <button class="rail-btn" id="open-btn" data-i18n-aria="rail.open"><svg class="ic"><use href="#i-plus" /></svg><span class="rail-lbl" data-i18n="rail.open">Open</span></button>
+        <div class="rail-sep" aria-hidden="true"></div>
+        <button class="rail-btn on" data-nav="read" data-i18n-aria="rail.reader"><svg class="ic"><use href="#i-book" /></svg><span class="rail-lbl" data-i18n="rail.reader">Reader</span></button>
+        <button class="rail-btn" data-nav="lib" data-i18n-aria="rail.library"><svg class="ic"><use href="#i-grid" /></svg><span class="rail-lbl" data-i18n="rail.library">Library</span></button>
+        <button class="rail-btn" data-nav="vocab" data-i18n-aria="rail.vocab"><svg class="ic"><use href="#i-cards" /></svg><span class="rail-lbl" data-i18n="rail.vocab">Vocab</span></button>
         <div class="sp"></div>
-        <button class="rail-btn" id="gear-btn" aria-label="Settings"><svg class="ic"><use href="#i-sliders" /></svg><span class="rail-lbl">Settings</span></button>
+        <div class="rail-sep" aria-hidden="true"></div>
+        <button class="rail-btn" id="gear-btn" data-i18n-aria="rail.settings"><svg class="ic"><use href="#i-gear" /></svg><span class="rail-lbl" data-i18n="rail.settings">Settings</span></button>
       </nav>
 
       <div class="main">
         <!-- Top bar -->
         <header class="topbar">
-          <button class="tbtn" id="rail-toggle" title="Menu" aria-label="Menu"><svg class="ic"><use href="#i-list" /></svg></button>
-          <button class="tbtn reader-only" id="toc-btn" title="Contents" aria-label="Contents" hidden><svg class="ic"><use href="#i-list" /></svg></button>
-          <button class="tbtn reader-only" id="focus-btn" title="Focus mode (F)" aria-label="Focus mode"><svg class="ic"><use href="#i-expand" /></svg></button>
+          <button class="tbtn" id="rail-toggle" data-i18n-title="bar.menu"><svg class="ic"><use href="#i-list" /></svg></button>
+          <button class="tbtn reader-only" id="toc-btn" data-i18n-title="bar.contents" hidden><svg class="ic"><use href="#i-toc" /></svg></button>
+          <button class="tbtn reader-only" id="focus-btn" data-i18n-title="bar.focus"><svg class="ic"><use href="#i-expand" /></svg></button>
           <input id="file-input" type="file" accept=".pdf,.txt,.md,.markdown,.epub,.docx,application/pdf,text/plain" hidden />
 
           <div class="title-wrap">
             <div class="bk" id="doc-title">Nyx Reader</div>
-            <div class="ch" id="doc-sub">Open a document to begin</div>
+            <div class="ch" id="doc-sub" data-i18n="doc.openToBegin">Open a document to begin</div>
           </div>
 
           <div class="tools reader-only" id="annotation-tools" hidden>
-            <button class="tbtn" id="tool-highlight" title="Highlight" aria-label="Highlight"><svg class="ic"><use href="#i-marker" /></svg></button>
-            <button class="tbtn" id="tool-note" title="Add note" aria-label="Add note"><svg class="ic"><use href="#i-note" /></svg></button>
+            <button class="tbtn" id="tool-highlight" data-i18n-title="bar.highlight"><svg class="ic"><use href="#i-marker" /></svg></button>
+            <button class="tbtn" id="tool-note" data-i18n-title="bar.note"><svg class="ic"><use href="#i-note" /></svg></button>
           </div>
 
-          <button class="tbtn reader-only" id="save-pdf" title="Save annotated copy" aria-label="Save annotated copy"><svg class="ic"><use href="#i-download" /></svg></button>
-          <button class="tbtn reader-only" id="find-button" title="Search (Ctrl+F)" aria-label="Search" hidden><svg class="ic"><use href="#i-search" /></svg></button>
-          <button class="tbtn reader-only" id="dict-button" title="Dictionary" aria-label="Dictionary"><svg class="ic"><use href="#i-panel" /></svg></button>
+          <button class="tbtn reader-only" id="save-pdf" data-i18n-title="bar.save"><svg class="ic"><use href="#i-download" /></svg></button>
+          <button class="tbtn reader-only" id="find-button" data-i18n-title="bar.search" hidden><svg class="ic"><use href="#i-search" /></svg></button>
+          <button class="tbtn reader-only" id="aa-btn" data-i18n-title="bar.format"><span class="aa-glyph">Aa</span></button>
+          <button class="tbtn reader-only" id="dict-button" data-i18n-title="bar.dictionary"><svg class="ic"><use href="#i-panel" /></svg></button>
         </header>
 
         <!-- Contextual annotation bar (colours + undo/redo/delete) -->
@@ -91,20 +96,20 @@
             <button class="swatch" type="button" data-color="#9fd2ff" style="--swatch:#9fd2ff" aria-label="Blue"></button>
           </div>
           <div class="annotbar-sep"></div>
-          <button class="tbtn sm" id="edit-undo" title="Undo" aria-label="Undo"><svg class="ic"><use href="#i-undo" /></svg></button>
-          <button class="tbtn sm" id="edit-redo" title="Redo" aria-label="Redo"><svg class="ic"><use href="#i-redo" /></svg></button>
-          <button class="tbtn sm" id="edit-delete" title="Delete selected" aria-label="Delete selected"><svg class="ic"><use href="#i-trash" /></svg></button>
+          <button class="tbtn sm" id="edit-undo" data-i18n-title="bar.undo"><svg class="ic"><use href="#i-undo" /></svg></button>
+          <button class="tbtn sm" id="edit-redo" data-i18n-title="bar.redo"><svg class="ic"><use href="#i-redo" /></svg></button>
+          <button class="tbtn sm" id="edit-delete" data-i18n-title="bar.delete"><svg class="ic"><use href="#i-trash" /></svg></button>
         </div>
 
         <!-- Search bar (PDF find) -->
         <div class="searchbar" id="find-bar">
           <svg class="ic dim"><use href="#i-search" /></svg>
-          <input id="find-input" type="text" placeholder="Find in document" autocomplete="off" spellcheck="false" />
+          <input id="find-input" type="text" data-i18n-ph="find.placeholder" placeholder="Find in document" autocomplete="off" spellcheck="false" />
           <span class="cnt" id="find-count"></span>
           <div class="nav-s">
-            <button class="tbtn sm" id="find-prev" aria-label="Previous match"><svg class="ic"><use href="#i-up" /></svg></button>
-            <button class="tbtn sm" id="find-next" aria-label="Next match"><svg class="ic"><use href="#i-down" /></svg></button>
-            <button class="tbtn sm" id="find-close" aria-label="Close"><svg class="ic"><use href="#i-close" /></svg></button>
+            <button class="tbtn sm" id="find-prev" data-i18n-aria="bar.prevMatch"><svg class="ic"><use href="#i-up" /></svg></button>
+            <button class="tbtn sm" id="find-next" data-i18n-aria="bar.nextMatch"><svg class="ic"><use href="#i-down" /></svg></button>
+            <button class="tbtn sm" id="find-close" data-i18n-aria="bar.close"><svg class="ic"><use href="#i-close" /></svg></button>
           </div>
         </div>
 
@@ -119,14 +124,14 @@
           <!-- Library view (open + recent) -->
           <div class="view library" id="library" hidden>
           <div class="libwrap">
-            <div class="vh">Library</div>
-            <div class="vsub">Open a PDF, EPUB, Word or text file — or pick up a recent one.</div>
+            <div class="vh" data-i18n="lib.title">Library</div>
+            <div class="vsub" data-i18n="lib.subtitle">Open a PDF, EPUB, Word or text file — or pick up a recent one.</div>
             <div class="libactions">
-              <button class="pbtn primary" id="lib-open"><svg class="ic"><use href="#i-file" /></svg>Open a file</button>
+              <button class="pbtn primary" id="lib-open"><svg class="ic"><use href="#i-file" /></svg><span data-i18n="lib.open">Open a file</span></button>
               <span class="libformats">PDF · EPUB · DOCX · TXT · MD</span>
             </div>
             <div id="recent-files" class="recent-files" hidden>
-              <div class="dlabel">Recent</div>
+              <div class="dlabel" data-i18n="lib.recent">Recent</div>
               <div id="recent-list" class="books"></div>
             </div>
           </div>
@@ -135,16 +140,16 @@
           <!-- Vocabulary view -->
           <div class="view vocab-view" id="vocab" hidden>
             <div class="vocabwrap">
-              <div class="vh">Vocabulary</div>
-              <div class="vsub">Words you saved while reading — each keeps the sentence it came from.</div>
+              <div class="vh" data-i18n="vocab.title">Vocabulary</div>
+              <div class="vsub" data-i18n="vocab.subtitle">Words you saved while reading — each keeps the sentence it came from.</div>
               <div class="vocab-actions">
-                <button class="pbtn primary" id="vocab-export"><svg class="ic"><use href="#i-download" /></svg>Export CSV</button>
+                <button class="pbtn primary" id="vocab-export"><svg class="ic"><use href="#i-download" /></svg><span data-i18n="vocab.export">Export CSV</span></button>
                 <span class="libformats" id="vocab-count"></span>
               </div>
               <div id="vocab-list" class="vocab-list"></div>
               <div id="vocab-empty" class="vocab-empty" hidden>
                 <div class="dictionary-empty-icon">★</div>
-                <p>No saved words yet. Look up a word and tap the bookmark to save it here.</p>
+                <p data-i18n="vocab.empty">No saved words yet. Look up a word and tap the bookmark to save it here.</p>
               </div>
             </div>
           </div>
@@ -164,119 +169,142 @@
           <div class="pop-head">
             <span class="wd" id="pop-word"></span>
             <div class="pop-acts">
-              <button class="iconbtn" id="pop-audio" title="Pronounce" aria-label="Pronounce"><svg class="ic"><use href="#i-volume" /></svg></button>
-              <button class="iconbtn" id="pop-save" title="Save word" aria-label="Save word"><svg class="ic"><use href="#i-bookmark" /></svg></button>
+              <button class="iconbtn" id="pop-audio" data-i18n-title="pop.pronounce"><svg class="ic"><use href="#i-volume" /></svg></button>
+              <button class="iconbtn" id="pop-save" data-i18n-title="pop.saveWord"><svg class="ic"><use href="#i-bookmark" /></svg></button>
+              <button class="iconbtn" id="pop-close" data-i18n-title="pop.close"><svg class="ic"><use href="#i-close" /></svg></button>
             </div>
           </div>
           <div class="ph" id="pop-ph"></div>
           <div class="gloss" id="pop-gloss"></div>
-          <button class="more" id="pop-more" type="button">Full entry &amp; examples <svg class="ic"><use href="#i-arrow" /></svg></button>
+          <button class="more" id="pop-more" type="button"><span data-i18n="dict.fullEntry">Full entry &amp; examples</span> <svg class="ic"><use href="#i-arrow" /></svg></button>
         </div>
 
         <!-- Note editor (reflow comments) -->
         <div class="note-pop" id="note-pop">
-          <textarea id="note-text" placeholder="Add a note…"></textarea>
+          <textarea id="note-text" data-i18n-ph="note.placeholder" placeholder="Add a note…"></textarea>
           <div class="note-pop-actions">
-            <button class="save" id="note-save" type="button">Save</button>
-            <button class="del" id="note-del" type="button">Delete</button>
+            <button class="save" id="note-save" type="button" data-i18n="note.save">Save</button>
+            <button class="del" id="note-del" type="button" data-i18n="note.delete">Delete</button>
           </div>
         </div>
 
         <!-- Contents drawer -->
         <aside class="toc" id="toc">
-          <div class="dhead"><span class="lbl">Contents</span><button class="iconbtn" id="toc-x" aria-label="Close"><svg class="ic"><use href="#i-close" /></svg></button></div>
+          <div class="dhead"><span class="lbl" data-i18n="toc.title">Contents</span><button class="iconbtn" id="toc-x" data-i18n-aria="bar.close"><svg class="ic"><use href="#i-close" /></svg></button></div>
           <div id="toc-list"></div>
         </aside>
 
         <!-- Dictionary drawer -->
         <aside class="drawer" id="dict" aria-label="Dictionary">
           <div class="dhead">
-            <span class="lbl">Dictionary</span>
-            <button class="iconbtn" id="dict-x" aria-label="Close"><svg class="ic"><use href="#i-close" /></svg></button>
+            <span class="lbl" data-i18n="dict.title">Dictionary</span>
+            <button class="iconbtn" id="dict-x" data-i18n-aria="bar.close"><svg class="ic"><use href="#i-close" /></svg></button>
           </div>
           <div class="search-box">
             <svg class="ic dim"><use href="#i-search" /></svg>
-            <input id="search-input" class="search-input" type="text" placeholder="Search a word…" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            <input id="search-input" class="search-input" type="text" data-i18n-ph="dict.searchPh" placeholder="Search a word…" autocomplete="off" autocapitalize="off" spellcheck="false" />
             <div id="suggestions" class="suggestions" hidden></div>
           </div>
           <div id="dictionary-content" class="dictionary-content">
             <div class="dictionary-empty">
               <div class="dictionary-empty-icon">Aa</div>
-              <p>Double-click or tap an English word, or type one above, to see its translation and examples.</p>
+              <p data-i18n="dict.empty">Double-click or tap an English word, or type one above, to see its translation and examples.</p>
             </div>
           </div>
         </aside>
 
-        <!-- Settings sheet -->
+        <!-- Scrim (mobile nav rail) -->
         <div class="scrim" id="scrim"></div>
-        <aside class="sheet" id="sheet" aria-label="Settings">
-          <div class="sheet-head"><h3>Settings</h3><button class="iconbtn" id="sheet-x" aria-label="Close"><svg class="ic"><use href="#i-close" /></svg></button></div>
 
-          <div class="field">
-            <label>Theme</label>
-            <div class="seg" id="theme-seg">
-              <button data-theme="paper"><span class="swatch-sq" style="background:#fbf8f2"></span>Paper</button>
-              <button data-theme="sepia"><span class="swatch-sq" style="background:#f4ecd9"></span>Sepia</button>
-              <button data-theme="night"><span class="swatch-sq" style="background:#15181c"></span>Night</button>
-            </div>
-          </div>
-
-          <div class="field">
-            <label>Look up a word on</label>
-            <div class="seg" id="trigger-seg">
-              <button data-trig="single" class="on">Single tap</button>
-              <button data-trig="double">Double tap</button>
-            </div>
-          </div>
-
-          <div class="field">
-            <button class="rowbtn" id="toggle-popover"><svg class="ic"><use href="#i-panel" /></svg><span>Always show popover</span><span class="rowstate" id="popover-state">Off</span></button>
-          </div>
-
-          <div class="sheet-group" id="reading-group">
-            <div class="dlabel">Reading (text formats)</div>
-            <div class="field">
-              <label>Reading font</label>
-              <select id="font-sel">
-                <option value='"Newsreader", Georgia, serif'>Newsreader</option>
-                <option value='"Spectral", Georgia, serif'>Spectral</option>
-                <option value='"Literata", Georgia, serif'>Literata</option>
-                <option value='"Hanken Grotesk", sans-serif'>Hanken Grotesk (sans)</option>
-              </select>
-            </div>
-            <div class="field"><label>Text size <span class="rangeval" id="size-val">19px</span></label><input type="range" id="size-r" min="15" max="28" step="1" value="19" /></div>
-            <div class="field"><label>Line spacing <span class="rangeval" id="lead-val">1.75</span></label><input type="range" id="lead-r" min="1.4" max="2.1" step="0.01" value="1.75" /></div>
-            <div class="field"><label>Column width <span class="rangeval" id="meas-val">42rem</span></label><input type="range" id="meas-r" min="32" max="56" step="1" value="42" /></div>
-            <div class="field">
-              <button class="rowbtn" id="toggle-columns"><svg class="ic"><use href="#i-spread" /></svg><span>Two-page view</span><span class="rowstate" id="columns-state">Off</span></button>
-            </div>
-          </div>
-
-          <div class="sheet-group" id="pdf-group">
-            <div class="dlabel">PDF</div>
-            <div class="field">
-              <button class="rowbtn" id="cycle-spread"><svg class="ic"><use href="#i-spread" /></svg><span>Two-page view</span><span class="rowstate" id="spread-state">Off</span></button>
-            </div>
-          </div>
-
-          <div class="sheet-group">
-            <div class="dlabel">Annotations</div>
-            <div class="field">
-              <button class="rowbtn" id="toggle-annotations"><svg class="ic"><use href="#i-marker" /></svg><span>Annotation tools</span><span class="rowstate" id="annot-state">On</span></button>
-            </div>
-          </div>
-
-          <div class="sheet-group">
-            <div class="dlabel">Document</div>
-            <div class="field stackbtns">
-              <button class="rowbtn" id="fullscreen"><svg class="ic"><use href="#i-fullscreen" /></svg><span id="fullscreen-label">Enter fullscreen</span></button>
-              <button class="rowbtn" id="properties"><svg class="ic"><use href="#i-info" /></svg><span>Document properties</span></button>
-              <button class="rowbtn" id="shortcuts"><svg class="ic"><use href="#i-keyboard" /></svg><span>Keyboard shortcuts</span></button>
-            </div>
-          </div>
-        </aside>
+        <!-- Floating exit-focus control (touch) — small, unobtrusive -->
+        <button class="focus-exit" id="focus-exit" data-i18n-title="focus.exit"><svg class="ic"><use href="#i-close" /></svg></button>
 
         <div class="toast" id="toast"></div>
+      </div>
+    </div>
+
+    <!-- Reading controls ("Aa") — no backdrop, so text reflows live as you adjust -->
+    <aside class="aa-panel" id="aa-panel" aria-label="Reading" hidden>
+      <div class="aa-head"><span class="aa-title" data-i18n="set.readingTitle">Reading</span><button class="iconbtn" id="aa-x" data-i18n-aria="bar.close"><svg class="ic"><use href="#i-close" /></svg></button></div>
+      <div class="aa-body">
+        <div class="field">
+          <label data-i18n="set.theme">Theme</label>
+          <div class="seg" id="theme-seg">
+            <button data-theme="paper"><span class="swatch-sq" style="background:#fbf8f2"></span><span data-i18n="set.paper">Paper</span></button>
+            <button data-theme="sepia"><span class="swatch-sq" style="background:#f4ecd9"></span><span data-i18n="set.sepia">Sepia</span></button>
+            <button data-theme="night"><span class="swatch-sq" style="background:#15181c"></span><span data-i18n="set.night">Night</span></button>
+          </div>
+        </div>
+
+        <div class="sheet-group" id="reading-group">
+          <div class="field">
+            <label data-i18n="set.readingFont">Reading font</label>
+            <select id="font-sel">
+              <option value='"Newsreader", Georgia, serif'>Newsreader</option>
+              <option value='"Spectral", Georgia, serif'>Spectral</option>
+              <option value='"Literata", Georgia, serif'>Literata</option>
+              <option value='"Hanken Grotesk", sans-serif'>Hanken Grotesk (sans)</option>
+            </select>
+          </div>
+          <div class="field"><label><span data-i18n="set.textSize">Text size</span> <span class="rangeval" id="size-val">19px</span></label><input type="range" id="size-r" min="12" max="40" step="1" value="19" /></div>
+          <div class="field"><label><span data-i18n="set.lineSpacing">Line spacing</span> <span class="rangeval" id="lead-val">1.75</span></label><input type="range" id="lead-r" min="1.25" max="2.4" step="0.01" value="1.75" /></div>
+          <div class="field"><label><span data-i18n="set.columnWidth">Column width</span> <span class="rangeval" id="meas-val">42rem</span></label><input type="range" id="meas-r" min="28" max="80" step="1" value="42" /></div>
+          <div class="field">
+            <button class="rowbtn" id="toggle-columns"><svg class="ic"><use href="#i-spread" /></svg><span data-i18n="set.twoPage">Two-page view</span><span class="rowstate" id="columns-state">Off</span></button>
+          </div>
+        </div>
+
+        <div class="sheet-group" id="pdf-group">
+          <div class="field">
+            <button class="rowbtn" id="cycle-spread"><svg class="ic"><use href="#i-spread" /></svg><span data-i18n="set.twoPage">Two-page view</span><span class="rowstate" id="spread-state">Off</span></button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Settings (centered modal) -->
+    <div class="settings-modal" id="sheet" hidden>
+      <div class="settings-card" role="dialog" aria-label="Settings" aria-modal="true">
+        <div class="sheet-head"><h3 data-i18n="set.title">Settings</h3><button class="iconbtn" id="sheet-x" data-i18n-aria="bar.close"><svg class="ic"><use href="#i-close" /></svg></button></div>
+        <div class="settings-body">
+
+          <div class="field">
+            <label data-i18n="set.language">Language</label>
+            <div class="seg" id="lang-seg">
+              <button data-lang="uz">O'zbekcha</button>
+              <button data-lang="en">English</button>
+              <button data-lang="ru">Русский</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label data-i18n="set.lookupOn">Look up a word on</label>
+            <div class="seg" id="trigger-seg">
+              <button data-trig="single" class="on" data-i18n="set.singleTap">Single tap</button>
+              <button data-trig="double" data-i18n="set.doubleTap">Double tap</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <button class="rowbtn" id="toggle-popover"><svg class="ic"><use href="#i-panel" /></svg><span data-i18n="set.alwaysPopover">Always show popover</span><span class="rowstate" id="popover-state">Off</span></button>
+          </div>
+
+          <div class="sheet-group">
+            <div class="dlabel" data-i18n="set.annotations">Annotations</div>
+            <div class="field">
+              <button class="rowbtn" id="toggle-annotations"><svg class="ic"><use href="#i-marker" /></svg><span data-i18n="set.annotationTools">Annotation tools</span><span class="rowstate" id="annot-state">On</span></button>
+            </div>
+          </div>
+
+          <div class="sheet-group">
+            <div class="dlabel" data-i18n="set.document">Document</div>
+            <div class="field stackbtns">
+              <button class="rowbtn" id="fullscreen"><svg class="ic"><use href="#i-fullscreen" /></svg><span id="fullscreen-label" data-i18n="set.enterFullscreen">Enter fullscreen</span></button>
+              <button class="rowbtn" id="properties"><svg class="ic"><use href="#i-info" /></svg><span data-i18n="set.properties">Document properties</span></button>
+              <button class="rowbtn" id="shortcuts"><svg class="ic"><use href="#i-keyboard" /></svg><span data-i18n="set.shortcuts">Keyboard shortcuts</span></button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -285,7 +313,7 @@
       <div class="modal-card">
         <div class="modal-head">
           <h3 id="modal-title"></h3>
-          <button id="modal-close" class="iconbtn" type="button" aria-label="Close"><svg class="ic"><use href="#i-close" /></svg></button>
+          <button id="modal-close" class="iconbtn" type="button" data-i18n-aria="modal.close"><svg class="ic"><use href="#i-close" /></svg></button>
         </div>
         <div id="modal-body" class="modal-body"></div>
       </div>
