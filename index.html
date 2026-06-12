@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Nyx Reader</title>
+    <meta name="theme-color" content="#15181c" />
+    <meta name="description" content="A calm reader for PDF, EPUB, Word and text — with dictionary lookup and vocabulary." />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Nyx" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -348,6 +355,14 @@
             <div class="field stackbtns">
               <button class="rowbtn" id="properties"><svg class="ic"><use href="#i-info" /></svg><span data-i18n="set.properties">Document properties</span></button>
               <button class="rowbtn" id="shortcuts"><svg class="ic"><use href="#i-keyboard" /></svg><span data-i18n="set.shortcuts">Keyboard shortcuts</span></button>
+            </div>
+          </div>
+
+          <div class="sheet-group" id="app-group">
+            <div class="dlabel" data-i18n="set.app">App</div>
+            <div class="field">
+              <button class="rowbtn" id="install-app"><svg class="ic"><use href="#i-download" /></svg><span data-i18n="set.install">Install app</span><span class="rowstate" id="install-state" data-i18n="set.installAvailable">Available</span></button>
+              <p class="field-hint" id="install-hint" hidden></p>
             </div>
           </div>
         </div>

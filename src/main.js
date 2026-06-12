@@ -1667,6 +1667,56 @@ onLangChange(() => {
   if (currentQuery) findCount.textContent = "";
   if (document.body.dataset.view === "vocab") refreshVocab();
   if (document.body.dataset.view === "lib") { renderBuiltin(); if (recentItems.length) renderRecentList(); }
+  refreshInstallUI();
+});
+
+/* ---------- Install (PWA) ---------- */
+const installBtn = $("#install-app");
+const installState = $("#install-state");
+const installHint = $("#install-hint");
+let deferredInstall = null;
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+function isIos() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+function refreshInstallUI() {
+  if (isStandalone()) {
+    installState.textContent = t("set.installed");
+    installState.hidden = false;
+    installBtn.disabled = true;
+    installHint.hidden = true;
+    return;
+  }
+  installBtn.disabled = false;
+  if (deferredInstall) {
+    installState.textContent = t("set.installAvailable");
+    installState.hidden = false;
+    installHint.hidden = true;
+  } else {
+    installState.hidden = true;
+    installHint.textContent = t(isIos() ? "set.installIos" : "set.installManual");
+  }
+}
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstall = event;
+  refreshInstallUI();
+});
+window.addEventListener("appinstalled", () => { deferredInstall = null; refreshInstallUI(); });
+installBtn.addEventListener("click", async () => {
+  if (deferredInstall) {
+    deferredInstall.prompt();
+    const { outcome } = await deferredInstall.userChoice;
+    if (outcome === "accepted") deferredInstall = null;
+    refreshInstallUI();
+  } else {
+    installHint.textContent = t(isIos() ? "set.installIos" : "set.installManual");
+    installHint.hidden = !installHint.hidden;
+  }
 });
 
 /* ---------- Properties & shortcuts ---------- */
@@ -2678,6 +2728,7 @@ applyTriggerUI();
 applyPopoverToggle();
 applyColumns();
 applyAnnotations();
+refreshInstallUI();
 renderBuiltin();
 refreshRecent();
 showGuide();

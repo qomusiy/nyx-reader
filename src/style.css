@@ -684,6 +684,9 @@ select { width: 100%; font-family: var(--reading-font); font-size: 15px; padding
 .rowbtn { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 14px; border: 0.5px solid var(--hair); border-radius: 11px; background: var(--chrome); color: var(--ink); font-size: 14.5px; cursor: pointer; transition: 0.15s; }
 .rowbtn:hover { background: var(--chrome-2); }
 .rowbtn .rowstate { margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+.rowbtn:disabled { opacity: 0.6; cursor: default; }
+.rowbtn:disabled:hover { background: var(--chrome); }
+.field-hint { margin: 8px 2px 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-3); }
 
 /* ---------- Toast ---------- */
 .toast {
