@@ -48,6 +48,11 @@
       <symbol id="i-check" viewBox="0 0 24 24"><polyline points="5,12.5 10,17.5 19,7"/></symbol>
       <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
       <symbol id="i-toc" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.6" cy="6" r="1.1"/><circle cx="4.6" cy="12" r="1.1"/><circle cx="4.6" cy="18" r="1.1"/></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="18.5" r="1.4"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l10-10a2 2 0 0 0-2.8-2.8L5.2 17.2 4 20z"/><path d="M14 7l3 3"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2.2h7.5a1.5 1.5 0 0 1 1.5 1.5v8.3a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/></symbol>
+      <symbol id="i-swap" viewBox="0 0 24 24"><polyline points="7,4 4,7 7,10"/><path d="M4 7h12a3 3 0 0 1 3 3"/><polyline points="17,20 20,17 17,14"/><path d="M20 17H8a3 3 0 0 1-3-3"/></symbol>
+      <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 3c0 3-4 4.5-4 8a4 4 0 0 0 8 0c0-1.6-1-2.8-1.5-3.5C13.2 9 14 11 12.5 12.5c.5-2-1.5-3-1.5-5 0-1.8 1-3.5 1-4.5z"/></symbol>
     </svg>
 
     <div class="app" id="app">
@@ -150,17 +155,39 @@
 
           <!-- Vocabulary view -->
           <div class="view vocab-view" id="vocab" hidden>
-            <div class="vocabwrap">
-              <div class="vh" data-i18n="vocab.title">Vocabulary</div>
-              <div class="vsub" data-i18n="vocab.subtitle">Words you saved while reading — each keeps the sentence it came from.</div>
-              <div class="vocab-actions">
-                <button class="pbtn primary" id="vocab-export"><svg class="ic"><use href="#i-download" /></svg><span data-i18n="vocab.export">Export CSV</span></button>
-                <span class="libformats" id="vocab-count"></span>
+            <!-- Decks grid -->
+            <div class="vocabwrap" id="vocab-decks">
+              <div class="vocab-top">
+                <div>
+                  <div class="vh" data-i18n="vocab.title">Vocabulary</div>
+                  <div class="vsub" data-i18n="vocab.subtitle">Words you saved while reading — each keeps the sentence it came from.</div>
+                </div>
+                <button class="pbtn primary" id="deck-new"><svg class="ic"><use href="#i-plus" /></svg><span data-i18n="vocab.newFolder">New folder</span></button>
               </div>
-              <div id="vocab-list" class="vocab-list"></div>
+              <div id="deck-grid" class="deck-grid"></div>
+              <div id="vocab-stats" class="vocab-stats" hidden></div>
               <div id="vocab-empty" class="vocab-empty" hidden>
                 <div class="dictionary-empty-icon">★</div>
                 <p data-i18n="vocab.empty">No saved words yet. Look up a word and tap the bookmark to save it here.</p>
+              </div>
+            </div>
+
+            <!-- Deck detail (one folder's words) -->
+            <div class="vocabwrap" id="vocab-detail" hidden>
+              <button class="backlink" id="deck-back"><svg class="ic"><use href="#i-chev-l" /></svg><span data-i18n="vocab.allDecks">All folders</span></button>
+              <div class="vocab-top">
+                <div class="deck-detail-title"><span class="deck-dot" id="deck-dot"></span><div class="vh" id="deck-title"></div></div>
+                <div class="detail-actions">
+                  <button class="pbtn primary" id="deck-study"><svg class="ic"><use href="#i-cards" /></svg><span data-i18n="vocab.study">Study</span></button>
+                  <button class="pbtn" id="deck-pdf"><svg class="ic"><use href="#i-download" /></svg><span data-i18n="vocab.exportPdf">Save PDF</span></button>
+                  <button class="pbtn" id="deck-csv"><svg class="ic"><use href="#i-download" /></svg><span data-i18n="vocab.export">Export CSV</span></button>
+                </div>
+              </div>
+              <span class="libformats" id="vocab-count"></span>
+              <div id="vocab-list" class="vocab-list"></div>
+              <div id="detail-empty" class="vocab-empty" hidden>
+                <div class="dictionary-empty-icon">★</div>
+                <p data-i18n="vocab.emptyFolder">No words in this folder yet.</p>
               </div>
             </div>
           </div>
@@ -326,6 +353,49 @@
         </div>
       </div>
     </div>
+
+    <!-- Flashcard study mode (full-screen) -->
+    <div class="study" id="study" hidden>
+      <header class="study-bar">
+        <button class="study-x" id="study-close" data-i18n-aria="study.close"><svg class="ic"><use href="#i-close" /></svg></button>
+        <div class="study-meter">
+          <div class="study-meter-top">
+            <span class="study-title" id="study-title"></span>
+            <span class="study-left" id="study-left"></span>
+          </div>
+          <div class="study-prog"><div class="study-prog-fill" id="study-prog-fill"></div></div>
+        </div>
+        <button class="study-dir" id="study-dir" data-i18n-title="study.toggleDir"><svg class="ic"><use href="#i-swap" /></svg></button>
+      </header>
+
+      <div class="study-stage" id="study-stage">
+        <div class="flashcard" id="flashcard">
+          <div class="fc-inner" id="fc-inner">
+            <div class="fc-face fc-front" id="fc-front"></div>
+            <div class="fc-face fc-back" id="fc-back"></div>
+          </div>
+        </div>
+
+        <div class="study-done" id="study-done" hidden>
+          <div class="study-done-mark"><svg class="ic"><use href="#i-check" /></svg></div>
+          <div class="study-done-h" data-i18n="study.done">All done!</div>
+          <div class="study-done-sub" id="study-done-sub"></div>
+          <button class="pbtn primary" id="study-restart"><svg class="ic"><use href="#i-cards" /></svg><span data-i18n="study.restart">Study again</span></button>
+        </div>
+      </div>
+
+      <footer class="study-foot" id="study-foot">
+        <button class="study-reveal" id="study-reveal"><span data-i18n="study.show">Show answer</span><kbd>Space</kbd></button>
+        <div class="grade-row" id="grade-row" hidden>
+          <button class="grade again" data-grade="again"><span class="gkey">1</span><b data-i18n="study.again">Again</b><span class="ghint" id="ghint-again"></span></button>
+          <button class="grade good" data-grade="good"><span class="gkey">2</span><b data-i18n="study.good">Good</b><span class="ghint" id="ghint-good"></span></button>
+          <button class="grade easy" data-grade="easy"><span class="gkey">3</span><b data-i18n="study.easy">Easy</b><span class="ghint" id="ghint-easy"></span></button>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Floating context menu (deck / word options) -->
+    <div class="ctxmenu" id="ctxmenu" hidden></div>
 
     <!-- Modal (properties / shortcuts) -->
     <div id="modal" class="modal" hidden>

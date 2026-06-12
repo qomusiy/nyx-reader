@@ -13,7 +13,11 @@ import { fetchWord, suggestWords } from "./dictionary.js";
 import { saveRecent, listRecent, touchRecent, removeRecent, getRecent, fileId } from "./recent.js";
 import { BUILTIN_BOOKS } from "./library.js";
 import { readText, readDocx, readEpub } from "./readers/reflow.js";
-import { saveVocab, removeVocab, listVocab, hasVocab, getHighlights, setHighlights } from "./store.js";
+import {
+  saveVocab, removeVocab, listVocab, hasVocab, vocabId, getVocab, moveVocab, setVocabSrs,
+  listFolders, saveFolder, getFolder, removeFolder, updateFolder,
+  getHighlights, setHighlights,
+} from "./store.js";
 import { GUIDE_HTML } from "./welcome.js";
 import { t, getLang, setLang, applyI18n, onLangChange } from "./i18n.js";
 
@@ -30,7 +34,6 @@ const docReader = $("#doc-reader");
 const library = $("#library");
 const vocabView = $("#vocab");
 const vocabListEl = $("#vocab-list");
-const vocabExport = $("#vocab-export");
 const vocabCount = $("#vocab-count");
 const vocabEmpty = $("#vocab-empty");
 const recentFiles = $("#recent-files");
@@ -179,12 +182,13 @@ function showView(name) {
   document.body.dataset.view = name;
   railNav.forEach((b) => b.classList.toggle("on", b.dataset.nav === name));
   hidePopover();
+  closeCtxMenu();
   if (name !== "read") { closeFind(); closeDict(); closeToc(); closeNoteEditor(); closeAa(); }
 }
 railNav.forEach((b) => b.addEventListener("click", () => {
   closeRail();
   if (b.dataset.nav === "lib") { renderBuiltin(); refreshRecent(); showView("lib"); }
-  else if (b.dataset.nav === "vocab") { refreshVocab(); showView("vocab"); }
+  else if (b.dataset.nav === "vocab") { openDeckId = null; refreshVocab(); showView("vocab"); }
   else showView("read");
 }));
 
@@ -603,47 +607,708 @@ function restoreReadingProgress() {
   });
 }
 
-/* ---------- Vocabulary view ---------- */
+/* ---------- Vocabulary view (decks grid + deck detail) ---------- */
+const deckGrid = $("#deck-grid");
+const deckNewBtn = $("#deck-new");
+const deckBackBtn = $("#deck-back");
+const deckTitleEl = $("#deck-title");
+const deckDotEl = $("#deck-dot");
+const deckStudyBtn = $("#deck-study");
+const deckPdfBtn = $("#deck-pdf");
+const deckCsvBtn = $("#deck-csv");
+const decksView = $("#vocab-decks");
+const detailView = $("#vocab-detail");
+const detailEmpty = $("#detail-empty");
+
+const DECK_COLORS = ["#3f7d5e", "#2f6f7a", "#5b5ea6", "#8a3a52", "#7a5230", "#6a7a2f", "#9a5a2c", "#4a6da7"];
+function nextDeckColor(list) { return DECK_COLORS[list.length % DECK_COLORS.length]; }
+function folderColor(folder) {
+  if (folder?.color) return folder.color;
+  const name = folder?.name || "";
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return DECK_COLORS[h % DECK_COLORS.length];
+}
+
+let vocabItems = [];       // all saved senses, newest first
+let vocabFolderList = [];  // all folders
+let openDeckId = null;     // null = grid; "all" or folderId = detail
+
+function folderName(id) {
+  const f = vocabFolderList.find((x) => x.id === id);
+  return f ? f.name : t("folder.default");
+}
+function deckItems(id) {
+  return id === "all" ? vocabItems : vocabItems.filter((r) => r.folderId === id);
+}
+
+/* ---------- Spaced repetition (SM-2-lite) ---------- */
+const DAY = 86400000;
+function isDue(r) { return !r.srs || (r.srs.due || 0) <= Date.now(); }
+function isLearned(r) { return !!(r.srs && r.srs.interval >= 7); }
+function dueCount(items) { return items.filter(isDue).length; }
+function learnedFraction(items) { return items.length ? items.filter(isLearned).length / items.length : 0; }
+function reviewCard(srs, grade) {
+  let { ease = 2.5, interval = 0, reps = 0, lapses = 0 } = srs || {};
+  if (grade === "again") {
+    reps = 0; lapses += 1; interval = 0; ease = Math.max(1.3, ease - 0.2);
+  } else {
+    reps += 1;
+    if (reps === 1) interval = grade === "easy" ? 4 : 1;
+    else if (reps === 2) interval = grade === "easy" ? 7 : 3;
+    else interval = Math.max(1, Math.round(interval * ease * (grade === "easy" ? 1.3 : 1)));
+    if (grade === "easy") ease += 0.15;
+    ease = Math.max(1.3, ease);
+  }
+  return { ease, interval, reps, lapses, due: Date.now() + interval * DAY, last: Date.now() };
+}
+function intervalLabel(days) { return days < 1 ? t("min.lt") : t("min.day", { n: days }); }
+
 async function refreshVocab() {
-  const items = await listVocab();
-  vocabCount.textContent = items.length
-    ? (getLang() === "en" && items.length === 1 ? "1 word" : t("vocab.count", { n: items.length }))
-    : "";
-  vocabListEl.replaceChildren();
-  vocabEmpty.hidden = items.length > 0;
-  items.forEach((record) => {
-    const row = document.createElement("div");
-    row.className = "vocab-row";
-    row.append(createTextElement("div", record.word, "vocab-w"));
+  [vocabItems, vocabFolderList] = await Promise.all([listVocab(), listFolders()]);
+  // Every word must live in a real folder (there is no "All" bucket). Sweep any
+  // orphans — e.g. v1-migrated words — into a default folder so they stay visible.
+  if (await rehomeOrphans()) [vocabItems, vocabFolderList] = await Promise.all([listVocab(), listFolders()]);
+  if (openDeckId && !vocabFolderList.some((f) => f.id === openDeckId)) openDeckId = null;
+  if (openDeckId) { decksView.hidden = true; detailView.hidden = false; renderDeckDetail(); }
+  else { detailView.hidden = true; decksView.hidden = false; renderDeckGrid(); }
+}
+
+async function rehomeOrphans() {
+  const folderIds = new Set(vocabFolderList.map((f) => f.id));
+  const orphans = vocabItems.filter((r) => !r.folderId || !folderIds.has(r.folderId));
+  if (!orphans.length) return false;
+  let home = vocabFolderList[0];
+  if (!home) home = await saveFolder({ name: t("folder.default"), color: nextDeckColor([]) });
+  for (const r of orphans) await moveVocab(r.id, home.id);
+  return true;
+}
+
+/* ---------- Progress ring ---------- */
+function ringEl(fraction) {
+  const r = 15, c = 2 * Math.PI * r, off = c * (1 - fraction), pct = Math.round(fraction * 100);
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<svg class="ring" viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="${r}"/><circle class="ring-fill" cx="18" cy="18" r="${r}" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/><text x="18" y="18" text-anchor="middle" dominant-baseline="central">${pct}</text></svg>`;
+  return wrap.firstElementChild;
+}
+
+/* ---------- Decks grid + stats ---------- */
+function renderDeckGrid() {
+  deckGrid.replaceChildren();
+  vocabEmpty.hidden = vocabItems.length > 0;
+  vocabFolderList.forEach((f) => {
+    deckGrid.append(deckTile({ id: f.id, name: f.name, color: folderColor(f), items: deckItems(f.id), folder: f }));
+  });
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "deck deck-add";
+  add.innerHTML = `<svg class="ic"><use href="#i-plus" /></svg><span>${t("vocab.newFolder")}</span>`;
+  add.addEventListener("click", async () => { const f = await editFolderDialog({}); if (f) openDeck(f.id); });
+  deckGrid.append(add);
+  renderStats();
+}
+
+const startOfDay = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+function renderStats() {
+  const stats = $("#vocab-stats");
+  stats.replaceChildren();
+  if (!vocabItems.length) { stats.hidden = true; return; }
+  stats.hidden = false;
+
+  const todayStart = startOfDay();
+  const yestStart = todayStart - DAY;
+  const learnedAt = (r) => r.srs && r.srs.learnedAt;
+  const learnedToday = vocabItems.filter((r) => learnedAt(r) >= todayStart).length;
+  const learnedYesterday = vocabItems.filter((r) => learnedAt(r) >= yestStart && learnedAt(r) < todayStart).length;
+  const due = dueCount(vocabItems);
+
+  // Daily streak: consecutive days (ending today) with at least one review.
+  const studiedDays = new Set(vocabItems.filter((r) => r.srs?.last).map((r) => startOfDay(new Date(r.srs.last))));
+  let streak = 0;
+  for (let day = todayStart; studiedDays.has(day); day -= DAY) streak += 1;
+
+  stats.append(createTextElement("div", t("stats.title"), "stats-title"));
+  const grid = document.createElement("div");
+  grid.className = "stats-grid";
+  const cards = [
+    { value: vocabItems.length, label: t("stats.totalSaved"), icon: "i-cards" },
+    { value: learnedToday, label: t("stats.learnedToday"), icon: "i-check", accent: true },
+    { value: learnedYesterday, label: t("stats.learnedYesterday"), icon: "i-check" },
+    { value: due, label: t("stats.dueNow"), icon: "i-bookmark" },
+    { value: streak, label: t("stats.streak"), icon: "i-flame" },
+  ];
+  cards.forEach((c) => {
+    const card = document.createElement("div");
+    card.className = "stat" + (c.accent ? " stat-accent" : "");
+    card.innerHTML = `<div class="stat-ic"><svg class="ic"><use href="#${c.icon}" /></svg></div>`;
     const body = document.createElement("div");
-    body.className = "vocab-body";
-    body.append(createTextElement("div", record.translation || "—", "vocab-tr"));
-    if (record.context) body.append(createTextElement("div", `“${record.context}”`, "vocab-ctx"));
-    if (record.source) body.append(createTextElement("div", record.source, "vocab-src"));
-    row.append(body);
-    const x = document.createElement("button");
-    x.className = "vocab-x";
-    x.setAttribute("aria-label", t("vocab.remove", { word: record.word }));
-    x.innerHTML = `<svg class="ic" style="width:18px;height:18px"><use href="#i-trash" /></svg>`;
-    x.addEventListener("click", async () => { await removeVocab(record.word); refreshVocab(); reflectSaveState(); });
-    row.append(x);
-    vocabListEl.append(row);
+    body.append(createTextElement("div", String(c.value), "stat-num"));
+    body.append(createTextElement("div", c.label, "stat-lbl"));
+    card.append(body);
+    grid.append(card);
+  });
+  stats.append(grid);
+}
+
+function deckTile({ id, name, color, items, folder }) {
+  const count = items.length, due = dueCount(items);
+  const el = document.createElement("div");
+  el.className = "deck";
+  el.tabIndex = 0;
+  el.setAttribute("role", "button");
+
+  if (folder) {
+    const kebab = document.createElement("button");
+    kebab.className = "deck-kebab";
+    kebab.setAttribute("aria-label", t("vocab.options"));
+    kebab.innerHTML = `<svg class="ic"><use href="#i-more" /></svg>`;
+    kebab.addEventListener("click", (e) => { e.stopPropagation(); openDeckMenu(folder, kebab.getBoundingClientRect()); });
+    el.append(kebab);
+  }
+
+  const top = document.createElement("div");
+  top.className = "deck-top";
+  const icon = document.createElement("div");
+  icon.className = "deck-icon";
+  icon.style.background = color;
+  icon.innerHTML = `<svg class="ic"><use href="#${folder ? "i-folder" : "i-cards"}" /></svg>`;
+  const meta = document.createElement("div");
+  meta.append(createTextElement("div", name, "deck-name"));
+  meta.append(createTextElement("div", t("vocab.count", { n: count }), "deck-count"));
+  top.append(icon, meta);
+  el.append(top);
+
+  const foot = document.createElement("div");
+  foot.className = "deck-foot";
+  foot.append(ringEl(learnedFraction(items)));
+  if (due > 0) foot.append(createTextElement("span", t("vocab.due", { n: due }), "deck-due"));
+  el.append(foot);
+
+  el.addEventListener("click", () => openDeck(id));
+  el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDeck(id); } });
+  return el;
+}
+
+function openDeck(id) { openDeckId = id; refreshVocab(); }
+function closeDeck() { openDeckId = null; refreshVocab(); }
+deckBackBtn.addEventListener("click", closeDeck);
+deckNewBtn.addEventListener("click", async () => { const f = await editFolderDialog({}); if (f) openDeck(f.id); });
+
+/* ---------- Deck detail (word list) ---------- */
+function renderDeckDetail() {
+  const items = deckItems(openDeckId);
+  deckTitleEl.textContent = openDeckId === "all" ? t("vocab.allWords") : folderName(openDeckId);
+  deckDotEl.style.background = openDeckId === "all" ? "var(--accent)"
+    : folderColor(vocabFolderList.find((f) => f.id === openDeckId));
+  vocabCount.textContent = items.length ? t("vocab.count", { n: items.length }) : "";
+  deckStudyBtn.disabled = !items.length;
+  deckPdfBtn.disabled = deckCsvBtn.disabled = !items.length;
+  vocabListEl.replaceChildren();
+  detailEmpty.hidden = items.length > 0;
+  items.forEach((record) => vocabListEl.append(wordRow(record)));
+}
+
+function wordRow(record) {
+  const row = document.createElement("div");
+  row.className = "vocab-row";
+
+  const head = document.createElement("div");
+  head.className = "vocab-w";
+  head.append(createTextElement("span", record.word, "vocab-word"));
+  if (record.pronunciation) head.append(createTextElement("span", record.pronunciation, "vocab-ipa"));
+  if (record.wordClass) head.append(createTextElement("span", record.wordClass, "vocab-pos"));
+  row.append(head);
+
+  const body = document.createElement("div");
+  body.className = "vocab-body";
+  body.append(createTextElement("div", record.translation || "—", "vocab-tr"));
+  if (record.example) body.append(createTextElement("div", record.example, "vocab-ex"));
+  if (record.context) body.append(createTextElement("div", `“${record.context}”`, "vocab-ctx"));
+  const meta = [record.source, openDeckId === "all" ? folderName(record.folderId) : ""].filter(Boolean);
+  if (meta.length) body.append(createTextElement("div", meta.join(" · "), "vocab-src"));
+  row.append(body);
+
+  const kebab = document.createElement("button");
+  kebab.className = "vocab-kebab";
+  kebab.setAttribute("aria-label", t("vocab.options"));
+  kebab.innerHTML = `<svg class="ic"><use href="#i-more" /></svg>`;
+  kebab.addEventListener("click", (e) => { e.stopPropagation(); openWordMenu(record, kebab.getBoundingClientRect()); });
+  row.append(kebab);
+  return row;
+}
+
+deckStudyBtn.addEventListener("click", () => startStudy(deckItems(openDeckId), deckTitleEl.textContent));
+deckPdfBtn.addEventListener("click", () => openPrintSetup(deckItems(openDeckId), deckTitleEl.textContent, deckColorOf(openDeckId)));
+deckCsvBtn.addEventListener("click", () => exportCsv(deckItems(openDeckId), deckTitleEl.textContent));
+
+/* ---------- Word + deck context menus ---------- */
+function openWordMenu(record, rect) {
+  openCtxMenu(rect, [
+    { label: t("vocab.moveTo"), icon: "i-folder", onClick: () => moveWordFlow(record) },
+    { sep: true },
+    { label: t("vocab.delete"), icon: "i-trash", danger: true, onClick: async () => { await removeVocab(record.id); await refreshVocab(); reflectSaveState(); } },
+  ]);
+}
+async function moveWordFlow(record) {
+  const folder = await pickFolder();
+  if (!folder) return;
+  await moveVocab(record.id, folder.id);
+  toast(t("toast.moved", { folder: folder.name }));
+  await refreshVocab();
+}
+function openDeckMenu(folder, rect) {
+  openCtxMenu(rect, [
+    { label: t("vocab.study"), icon: "i-cards", onClick: () => startStudy(deckItems(folder.id), folder.name) },
+    { label: t("vocab.rename"), icon: "i-edit", onClick: async () => { await editFolderDialog({ folder }); await refreshVocab(); } },
+    { colors: DECK_COLORS, current: folderColor(folder), onPick: async (color) => { await updateFolder(folder.id, { color }); await refreshVocab(); } },
+    { sep: true },
+    { label: t("vocab.exportPdf"), icon: "i-download", onClick: () => openPrintSetup(deckItems(folder.id), folder.name, folderColor(folder)) },
+    { label: t("vocab.export"), icon: "i-download", onClick: () => exportCsv(deckItems(folder.id), folder.name) },
+    { sep: true },
+    { label: t("vocab.delete"), icon: "i-trash", danger: true, onClick: async () => {
+      const n = deckItems(folder.id).length;
+      if (!confirm(t("toast.confirmDeleteFolder", { name: folder.name, n }))) return;
+      await removeFolder(folder.id);
+      if (openDeckId === folder.id) openDeckId = null;
+      await refreshVocab();
+      reflectSaveState();
+    } },
+  ]);
+}
+
+const ctxmenu = $("#ctxmenu");
+function closeCtxMenu() { ctxmenu.hidden = true; ctxmenu.replaceChildren(); }
+function openCtxMenu(rect, entries) {
+  ctxmenu.replaceChildren();
+  entries.forEach((e) => {
+    if (e.sep) { ctxmenu.append(Object.assign(document.createElement("div"), { className: "ctx-sep" })); return; }
+    if (e.colors) {
+      ctxmenu.append(createTextElement("div", t("vocab.color"), "ctx-label"));
+      const row = document.createElement("div");
+      row.className = "ctx-swatches";
+      e.colors.forEach((col) => {
+        const sw = document.createElement("button");
+        sw.className = "ctx-swatch" + (col === e.current ? " on" : "");
+        sw.style.background = col;
+        sw.addEventListener("click", () => { closeCtxMenu(); e.onPick(col); });
+        row.append(sw);
+      });
+      ctxmenu.append(row);
+      return;
+    }
+    const b = document.createElement("button");
+    if (e.danger) b.className = "danger";
+    b.innerHTML = `<svg class="ic"><use href="#${e.icon}" /></svg>`;
+    b.append(createTextElement("span", e.label));
+    b.addEventListener("click", () => { closeCtxMenu(); e.onClick(); });
+    ctxmenu.append(b);
+  });
+  ctxmenu.hidden = false;
+  const menuRect = ctxmenu.getBoundingClientRect();
+  const left = Math.max(8, Math.min(rect.right - menuRect.width, window.innerWidth - menuRect.width - 8));
+  let top = rect.bottom + 6;
+  if (top + menuRect.height > window.innerHeight - 8) top = Math.max(8, rect.top - menuRect.height - 6);
+  ctxmenu.style.left = `${left}px`;
+  ctxmenu.style.top = `${top}px`;
+}
+document.addEventListener("click", (e) => { if (!ctxmenu.hidden && !e.target.closest("#ctxmenu")) closeCtxMenu(); });
+window.addEventListener("resize", closeCtxMenu);
+
+/* ---------- Create / rename a folder (name + colour) ---------- */
+function editFolderDialog({ folder = null } = {}) {
+  return new Promise((resolve) => {
+    const wrap = document.createElement("div");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 60;
+    input.className = "folder-input";
+    input.placeholder = t("vocab.renamePh");
+    input.value = folder ? folder.name : "";
+
+    let chosen = folder ? folderColor(folder) : nextDeckColor(vocabFolderList);
+    const colorRow = document.createElement("div");
+    colorRow.className = "color-row";
+    DECK_COLORS.forEach((col) => {
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.className = "color-dot" + (col === chosen ? " on" : "");
+      dot.style.background = col;
+      dot.addEventListener("click", () => { chosen = col; [...colorRow.children].forEach((c) => c.classList.toggle("on", c === dot)); });
+      colorRow.append(dot);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "folder-create";
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "pbtn primary";
+    save.textContent = folder ? t("note.save") : t("folder.create");
+    const submit = async () => {
+      const name = input.value.trim();
+      if (!name) { toast(t("toast.folderNeedsName")); input.focus(); return; }
+      const result = folder ? await updateFolder(folder.id, { name, color: chosen }) : await saveFolder({ name, color: chosen });
+      finishFolderPick(result);
+    };
+    save.addEventListener("click", submit);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+    actions.append(save);
+
+    wrap.append(input, colorRow, actions);
+    pendingFolderPick = resolve;
+    openModal(folder ? t("vocab.rename") : t("vocab.newFolder"), wrap);
+    setTimeout(() => input.focus(), 60);
   });
 }
-vocabExport.addEventListener("click", async () => {
-  const items = await listVocab();
+
+/* ---------- Export helpers ---------- */
+function safeName(name) { return String(name || "vocabulary").replace(/[\\/:*?"<>|]+/g, "-").trim() || "vocabulary"; }
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+// Render print-ready HTML in a hidden iframe and open the print dialog (where the
+// user picks "Save as PDF"). An iframe avoids popup blockers, which broke the
+// previous new-window approach.
+function printDocument(html) {
+  const old = document.getElementById("print-frame");
+  if (old) old.remove();
+  const iframe = document.createElement("iframe");
+  iframe.id = "print-frame";
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(iframe);
+  const win = iframe.contentWindow;
+  const doc = win.document;
+  doc.open(); doc.write(html); doc.close();
+  let fired = false;
+  const fire = () => {
+    if (fired) return;
+    fired = true;
+    try { win.focus(); win.print(); } catch (e) { console.error(e); }
+    setTimeout(() => iframe.remove(), 1500);
+  };
+  // Give the iframe a tick to lay out before printing (whichever signal lands first).
+  iframe.onload = () => setTimeout(fire, 250);
+  if (doc.readyState === "complete") setTimeout(fire, 350);
+}
+function deckColorOf(id) { const f = vocabFolderList.find((x) => x.id === id); return f ? folderColor(f) : "#3f7d5e"; }
+function exportCsv(items, title) {
   if (!items.length) { toast(t("toast.noExport")); return; }
   const esc = (s) => `"${String(s || "").replace(/"/g, '""')}"`;
-  let csv = "Word,Translation,Context,Source\n";
-  items.forEach((r) => { csv += [esc(r.word), esc(r.translation), esc(r.context), esc(r.source)].join(",") + "\n"; });
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "nyx-vocabulary.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+  let csv = "Word,Pronunciation,Part of speech,Translation,Example,Context,Source,Folder\n";
+  items.forEach((r) => {
+    csv += [esc(r.word), esc(r.pronunciation), esc(r.wordClass), esc(r.translation), esc(r.example), esc(r.context), esc(r.source), esc(folderName(r.folderId))].join(",") + "\n";
+  });
+  downloadBlob(new Blob([csv], { type: "text/csv" }), `${safeName(title)}.csv`);
   toast(t("toast.exported", { n: items.length }));
+}
+
+/* ---------- Printable cut-out cards (fold / double-sided / reference) ---------- */
+const PRINT_DEFAULTS = { style: "fold", cols: 3, front: "en", ex: true, ipa: true, ctx: false, src: true };
+function loadPrintOpts() { try { return { ...PRINT_DEFAULTS, ...JSON.parse(localStorage.getItem("nyx-print") || "{}") }; } catch { return { ...PRINT_DEFAULTS }; } }
+function savePrintOpts(o) { localStorage.setItem("nyx-print", JSON.stringify(o)); }
+
+function openPrintSetup(items, title, color = "#3f7d5e") {
+  if (!items.length) { toast(t("toast.noPrint")); return; }
+  const opts = loadPrintOpts();
+  const wrap = document.createElement("div");
+  wrap.className = "print-setup";
+
+  const field = (labelKey, control) => {
+    const f = document.createElement("div");
+    f.className = "field";
+    f.append(createTextElement("label", t(labelKey)));
+    f.append(control);
+    return f;
+  };
+  const seg = (options, get, set) => {
+    const s = document.createElement("div");
+    s.className = "seg print-seg";
+    options.forEach((o) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = o.label;
+      b.className = o.value === get() ? "on" : "";
+      b.addEventListener("click", () => { set(o.value); [...s.children].forEach((c) => c.classList.toggle("on", c === b)); });
+      s.append(b);
+    });
+    return s;
+  };
+
+  wrap.append(field("print.style", seg(
+    [{ label: t("print.fold"), value: "fold" }, { label: t("print.duplex"), value: "duplex" }, { label: t("print.reference"), value: "reference" }],
+    () => opts.style, (v) => { opts.style = v; },
+  )));
+  wrap.append(field("print.size", seg(
+    [{ label: t("print.large"), value: 2 }, { label: t("print.standard"), value: 3 }, { label: t("print.compact"), value: 4 }],
+    () => opts.cols, (v) => { opts.cols = v; },
+  )));
+  wrap.append(field("print.direction", seg(
+    [{ label: t("print.frontEN"), value: "en" }, { label: t("print.frontNative"), value: "native" }],
+    () => opts.front, (v) => { opts.front = v; },
+  )));
+
+  const inc = document.createElement("div");
+  inc.className = "print-incl";
+  [["ipa", "print.ipa"], ["ex", "print.example"], ["ctx", "print.context"], ["src", "print.source"]].forEach(([key, labelKey]) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "incl-chip" + (opts[key] ? " on" : "");
+    chip.textContent = t(labelKey);
+    chip.addEventListener("click", () => { opts[key] = !opts[key]; chip.classList.toggle("on", opts[key]); });
+    inc.append(chip);
+  });
+  wrap.append(field("print.include", inc));
+
+  const gen = document.createElement("button");
+  gen.type = "button";
+  gen.className = "pbtn primary print-go";
+  gen.innerHTML = `<svg class="ic"><use href="#i-download" /></svg><span>${t("print.generate")}</span>`;
+  gen.addEventListener("click", () => { savePrintOpts(opts); closeModal(); buildCardsPrint(items, opts, title, color); });
+  wrap.append(gen);
+
+  openModal(t("print.title"), wrap);
+}
+
+function buildCardsPrint(items, opts, heading, color = "#3f7d5e") {
+  const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const num = new Map(items.map((r, i) => [r, i + 1]));
+  const big = opts.cols === 4 ? 0 : opts.cols === 3 ? 1 : 2; // size step
+
+  const wordFace = (r) => `<div class="fc">`
+    + `<div class="f-word">${esc(r.word)}</div>`
+    + (opts.ipa && r.pronunciation ? `<div class="f-ipa">${esc(r.pronunciation)}</div>` : "")
+    + (r.wordClass ? `<div class="f-pos">${esc(r.wordClass)}</div>` : "")
+    + `</div>`;
+  const meaningFace = (r) => `<div class="fc">`
+    + `<div class="f-tr">${esc(r.translation) || "—"}</div>`
+    + (opts.ex && r.example ? `<div class="f-ex">${esc(r.example)}</div>` : "")
+    + (opts.ctx && r.context ? `<div class="f-ctx">“${esc(r.context)}”</div>` : "")
+    + (opts.src && r.source ? `<div class="f-src">${esc(r.source)}</div>` : "")
+    + `</div>`;
+  const front = (r) => opts.front === "en" ? wordFace(r) : meaningFace(r);
+  const back = (r) => opts.front === "en" ? meaningFace(r) : wordFace(r);
+
+  // Chunk into rows of `cols` so layout — and duplex back-page mirroring — is exact.
+  const rows = [];
+  for (let i = 0; i < items.length; i += opts.cols) rows.push(items.slice(i, i + opts.cols));
+  const cell = (inner, r) => `<div class="card">${r ? `<span class="num">${num.get(r)}</span>` : ""}${inner}</div>`;
+  const blank = `<div class="card blank"></div>`;
+  const rowHtml = (cells) => `<div class="row">${cells.join("")}</div>`;
+
+  const cardH = opts.style === "fold"
+    ? [150, 178, 224][big] : opts.style === "reference"
+    ? [104, 132, 168][big] : [120, 150, 188][big];
+  const wordSize = [15, 19, 23][big];
+  const trSize = [12.5, 14.5, 16][big];
+  const date = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+
+  const hint = opts.style === "fold" ? t("print.foldHint") : opts.style === "duplex" ? t("print.duplexHint") : t("print.refHint");
+  const headerHtml = `<header><span class="dot"></span><h1>${esc(heading)}</h1><span class="meta">${esc(t("vocab.count", { n: items.length }))} · ${esc(date)}</span></header><p class="hint">${esc(hint)}</p>`;
+
+  let body;
+  if (opts.style === "fold") {
+    body = headerHtml + rows.map((row) => rowHtml(row.map((r) =>
+      `<div class="card fold"><span class="num">${num.get(r)}</span><div class="half top">${front(r)}</div><div class="fold-line"></div><div class="half bot">${back(r)}</div></div>`))).join("");
+  } else if (opts.style === "reference") {
+    body = headerHtml + rows.map((row) => rowHtml(row.map((r) =>
+      cell(`<div class="ref">${wordFace(r)}<div class="ref-sep"></div>${meaningFace(r)}</div>`, r)))).join("");
+  } else {
+    // Duplex: paginate, then emit front/back sheet pairs so each printed sheet's
+    // back holds the answers for its front (works across many pages, not just one).
+    const frontRow = (row) => { const cells = []; for (let c = 0; c < opts.cols; c++) cells.push(row[c] ? cell(front(row[c]), row[c]) : blank); return rowHtml(cells); };
+    const backRow = (row) => { const cells = new Array(opts.cols).fill(blank); row.forEach((r, c) => { cells[opts.cols - 1 - c] = cell(back(r), r); }); return rowHtml(cells); };
+    const rowsPerPage = Math.max(1, Math.floor(760 / (cardH + 26)));
+    const pages = [];
+    for (let i = 0; i < rows.length; i += rowsPerPage) pages.push(rows.slice(i, i + rowsPerPage));
+    body = pages.map((p) =>
+      `<section class="sheet">${headerHtml}${p.map(frontRow).join("")}</section>`
+      + `<section class="sheet">${headerHtml}${p.map(backRow).join("")}</section>`).join("");
+  }
+
+  const html = `<!doctype html><html><head><meta charset="utf-8" /><title>${esc(heading)}</title><style>
+    @page { margin: 11mm; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { font-family: "Hanken Grotesk", -apple-system, "Segoe UI", Roboto, sans-serif; color: #1f1c17; margin: 0; --c: ${color}; }
+    header { display: flex; align-items: center; gap: 10px; border-bottom: 2px solid var(--c); padding-bottom: 9px; margin-bottom: 4px; }
+    header .dot { width: 13px; height: 13px; border-radius: 50%; background: var(--c); flex: none; }
+    header h1 { font-size: 18px; margin: 0; font-weight: 700; flex: 1; }
+    header .meta { font-size: 11px; color: #8a8579; }
+    .hint { font-size: 10.5px; color: #a8a294; margin: 7px 0 13px; }
+    .sheet { break-after: page; }
+    .sheet:last-child { break-after: auto; }
+    .row { display: grid; grid-template-columns: repeat(${opts.cols}, 1fr); gap: 7mm; break-inside: avoid; margin-bottom: 7mm; }
+    .card { position: relative; height: ${cardH}px; padding: 13px 14px; overflow: hidden; display: flex; flex-direction: column; text-align: center;
+      border: 1px solid #d7d2c7; border-top: 3px solid var(--c); border-radius: 11px; background: #fff; }
+    .card.blank { border: 1px dashed #e7e3da; border-top: 1px dashed #e7e3da; }
+    .num { position: absolute; top: 7px; right: 10px; font-size: 9px; color: #c4bfb3; font-variant-numeric: tabular-nums; }
+    .fc { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; flex: 1; min-height: 0; }
+    .fold .half { flex: 1; display: flex; flex-direction: column; }
+    .fold-line { border-top: 1.5px dashed var(--c); opacity: 0.55; margin: 0 -14px; position: relative; }
+    .fold-line::after { content: "✂"; position: absolute; left: 4px; top: -8px; font-size: 10px; color: var(--c); opacity: 0.6; }
+    .f-word { font-family: "Iowan Old Style", Georgia, "Times New Roman", serif; font-size: ${wordSize}px; font-weight: 700; line-height: 1.12; color: #1a1712; }
+    .f-ipa { font-size: 11.5px; color: #9a9384; }
+    .f-pos { font-size: 9.5px; letter-spacing: .03em; color: #fff; background: var(--c); border-radius: 999px; padding: 2px 9px; }
+    .f-tr { font-size: ${trSize}px; font-weight: 600; line-height: 1.3; color: #2a2620; }
+    .f-ex { font-size: 11px; font-style: italic; color: #6a6459; line-height: 1.45; }
+    .f-ctx { font-size: 10px; font-style: italic; color: #a39c8e; line-height: 1.4; }
+    .f-src { font-size: 9.5px; color: #b8b1a3; margin-top: 1px; }
+    .ref { display: flex; flex-direction: column; gap: 6px; flex: 1; justify-content: center; }
+    .ref-sep { width: 38%; border-top: 1px solid #ece8df; margin: 1px auto; }
+  </style></head><body>
+    ${body}
+  </body></html>`;
+
+  printDocument(html);
+}
+
+/* ---------- Flashcard study mode (SRS) ---------- */
+const study = $("#study");
+const studyCloseBtn = $("#study-close");
+const studyDirBtn = $("#study-dir");
+const studyTitleEl = $("#study-title");
+const studyLeftEl = $("#study-left");
+const studyProgFill = $("#study-prog-fill");
+const flashcard = $("#flashcard");
+const fcInner = $("#fc-inner");
+const fcFront = $("#fc-front");
+const fcBack = $("#fc-back");
+const studyReveal = $("#study-reveal");
+const gradeRow = $("#grade-row");
+const studyDone = $("#study-done");
+const studyDoneSub = $("#study-done-sub");
+const studyRestartBtn = $("#study-restart");
+
+let studyQueue = [], studyPos = 0, studyReviewed = 0, studyFlipped = false;
+let studyDir = localStorage.getItem("nyx-study-dir") === "native" ? "native" : "en";
+let studySource = [], studyTitleText = "";
+
+function startStudy(items, title) {
+  studySource = items.slice();
+  studyTitleText = title || t("vocab.title");
+  let queue = items.filter(isDue);
+  if (!queue.length) queue = items.slice(); // nothing due → free review of the whole deck
+  if (!queue.length) { toast(t("study.empty")); return; }
+  studyQueue = shuffle(queue);
+  studyPos = 0; studyReviewed = 0;
+  study.hidden = false;
+  studyDone.hidden = true;
+  flashcard.hidden = false;
+  studyFoot().hidden = false;
+  studyTitleEl.textContent = studyTitleText;
+  applyStudyDirUI();
+  showCard();
+}
+function studyFoot() { return $("#study-foot"); }
+function shuffle(arr) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+// Fill a stable face container with the word side or the meaning side.
+function fillWordFace(el, r) {
+  el.replaceChildren();
+  el.append(createTextElement("div", r.word, "fc-word"));
+  if (r.pronunciation) el.append(createTextElement("div", r.pronunciation, "fc-ipa"));
+  if (r.wordClass) el.append(createTextElement("span", r.wordClass, "fc-pos"));
+  const speak = document.createElement("button");
+  speak.className = "fc-speak";
+  speak.setAttribute("aria-label", t("pop.pronounce"));
+  speak.innerHTML = `<svg class="ic"><use href="#i-volume" /></svg>`;
+  speak.addEventListener("click", (e) => { e.stopPropagation(); speak(r.word); });
+  el.append(speak);
+}
+function fillMeaningFace(el, r) {
+  el.replaceChildren();
+  el.append(createTextElement("div", r.translation || "—", "fc-tr"));
+  if (r.example) el.append(createTextElement("div", r.example, "fc-ex"));
+  if (r.context) el.append(createTextElement("div", `“${r.context}”`, "fc-ctx"));
+  if (r.source) el.append(createTextElement("div", r.source, "fc-src"));
+}
+
+function showCard() {
+  const card = studyQueue[studyPos];
+  if (!card) { finishStudy(); return; }
+  studyFlipped = false;
+  // Reset the flip with no animation so the next card starts face-up.
+  fcInner.classList.add("no-anim");
+  fcInner.classList.remove("flipped");
+  void fcInner.offsetWidth; // force reflow so the class change is committed
+  fcInner.classList.remove("no-anim");
+  (studyDir === "en" ? fillWordFace : fillMeaningFace)(fcFront, card);
+  (studyDir === "en" ? fillMeaningFace : fillWordFace)(fcBack, card);
+  studyReveal.hidden = false;
+  gradeRow.hidden = true;
+  studyLeftEl.textContent = t("study.left", { n: studyQueue.length - studyPos });
+  studyProgFill.style.width = `${Math.round((studyPos / studyQueue.length) * 100)}%`;
+}
+
+function flipCard() {
+  if (studyFlipped) return;
+  studyFlipped = true;
+  fcInner.classList.add("flipped");
+  studyReveal.hidden = true;
+  gradeRow.hidden = false;
+  const card = studyQueue[studyPos];
+  $("#ghint-again").textContent = intervalLabel(reviewCard(card.srs, "again").interval);
+  $("#ghint-good").textContent = intervalLabel(reviewCard(card.srs, "good").interval);
+  $("#ghint-easy").textContent = intervalLabel(reviewCard(card.srs, "easy").interval);
+}
+
+async function gradeCard(grade) {
+  if (!studyFlipped) return;
+  const card = studyQueue[studyPos];
+  const wasLearned = isLearned(card);
+  const srs = reviewCard(card.srs, grade);
+  // Stamp the moment a card first reaches "learned" — drives the stats panel.
+  srs.learnedAt = (srs.interval >= 7 && !wasLearned) ? Date.now() : (card.srs && card.srs.learnedAt) || null;
+  card.srs = srs;
+  await setVocabSrs(card.id, srs);
+  if (grade === "again") {
+    studyQueue.push(card); // see it again later this session
+  } else {
+    studyReviewed += 1;
+  }
+  studyPos += 1;
+  showCard();
+}
+
+function finishStudy() {
+  flashcard.hidden = true;
+  studyFoot().hidden = true;
+  studyProgFill.style.width = "100%";
+  studyLeftEl.textContent = "";
+  studyDoneSub.textContent = t("study.doneSub", { n: studyReviewed });
+  studyDone.hidden = false;
+}
+function closeStudy() {
+  study.hidden = true;
+  try { speechSynthesis.cancel(); } catch { /* ignore */ }
+  refreshVocab(); // reflect new due counts / progress rings
+}
+function applyStudyDirUI() { studyDirBtn.classList.toggle("on", studyDir === "native"); }
+
+flashcard.addEventListener("click", flipCard);
+studyReveal.addEventListener("click", flipCard);
+gradeRow.addEventListener("click", (e) => { const b = e.target.closest("[data-grade]"); if (b) gradeCard(b.dataset.grade); });
+studyCloseBtn.addEventListener("click", closeStudy);
+studyRestartBtn.addEventListener("click", () => startStudy(studySource, studyTitleText));
+studyDirBtn.addEventListener("click", () => {
+  studyDir = studyDir === "en" ? "native" : "en";
+  localStorage.setItem("nyx-study-dir", studyDir);
+  applyStudyDirUI();
+  showCard();
 });
+document.addEventListener("keydown", (e) => {
+  if (study.hidden) return;
+  if (e.key === "Escape") { closeStudy(); return; }
+  if (!studyDone.hidden) return;
+  if (e.key === " " || e.key === "Enter") { e.preventDefault(); flipCard(); return; }
+  if (studyFlipped) {
+    if (e.key === "1") gradeCard("again");
+    else if (e.key === "2") gradeCard("good");
+    else if (e.key === "3") gradeCard("easy");
+  }
+}, true);
 
 /* ---------- Lookup trigger setting ---------- */
 function applyTriggerUI() { [...triggerSeg.children].forEach((b) => b.classList.toggle("on", b.dataset.trig === triggerMode)); }
@@ -1060,7 +1725,12 @@ shortcutsButton.addEventListener("click", () => {
 });
 
 function openModal(title, bodyNode) { modalTitle.textContent = title; modalBody.replaceChildren(bodyNode); modal.hidden = false; }
-function closeModal() { modal.hidden = true; modalBody.replaceChildren(); }
+function closeModal() {
+  modal.hidden = true;
+  modalBody.replaceChildren();
+  // Dismissing the modal cancels an in-flight folder pick.
+  if (pendingFolderPick) { const resolve = pendingFolderPick; pendingFolderPick = null; resolve(null); }
+}
 modalClose.addEventListener("click", closeModal);
 modal.addEventListener("click", (event) => { if (event.target === modal) closeModal(); });
 
@@ -1382,39 +2052,153 @@ async function lookup(rawWord, anchorRect = null, context = "") {
   }
 }
 
-/* ---------- Saving words (vocabulary) ---------- */
-function buildVocabRecord() {
-  const rows = currentLookup?.rows;
-  const first = rows && rows[0];
-  const sense = first?.senses?.[0];
+/* ---------- Saving words (vocabulary) ----------
+   Each *sense* (translation) is its own saveable card, so one headword can be
+   saved several times. Cards land in a folder chosen per book. */
+function buildSenseRecord(group, sense) {
+  const translation = (sense?.translations || []).join(", ");
   return {
+    id: vocabId(currentLookup.word, group?.word_class, translation),
     word: currentLookup.word,
-    translation: sense ? sense.translations.join(", ") : "",
-    pronunciation: first?.pronunciation || "",
-    wordClass: first?.word_class || "",
+    translation,
+    pronunciation: group?.pronunciation || "",
+    wordClass: group?.word_class || "",
+    example: sense?.examples?.[0] || "",
     context: currentLookup.context || "",
     source: currentDocName || "",
     addedAt: Date.now(),
   };
 }
-async function toggleSaveCurrent() {
-  if (!currentLookup) return;
-  const word = currentLookup.word;
-  if (await hasVocab(word)) { await removeVocab(word); toast(t("toast.removedWord", { word })); }
-  else { await saveVocab(buildVocabRecord()); toast(t("toast.savedWord", { word })); }
+
+/* ---------- Folders: which folder this book's words go into ---------- */
+let currentFolderId = null;
+function bookFolderKey() { return `nyx-book-folder::${currentFileId || "_"}`; }
+
+// Resolve the folder for the current book — using the remembered choice if it
+// still exists, otherwise prompting. `force` always re-prompts (the "change"
+// affordance). Returns the folder, or null if the user cancelled.
+async function ensureFolder({ force = false } = {}) {
+  const key = bookFolderKey();
+  const id = force ? null : (localStorage.getItem(key) || currentFolderId);
+  if (id) {
+    const existing = await getFolder(id);
+    if (existing) { currentFolderId = existing.id; return existing; }
+  }
+  const folder = await pickFolder();
+  if (!folder) return null;
+  localStorage.setItem(key, folder.id);
+  currentFolderId = folder.id;
+  return folder;
+}
+
+// Folder picker built inside the shared modal; resolves with the chosen/created
+// folder, or null if dismissed.
+let pendingFolderPick = null;
+function pickFolder() {
+  return new Promise(async (resolve) => {
+    const folders = await listFolders();
+    const wrap = document.createElement("div");
+    wrap.className = "folder-pick";
+    wrap.append(createTextElement("p", t("folder.subtitle"), "folder-sub"));
+
+    if (folders.length) {
+      const list = document.createElement("div");
+      list.className = "folder-list";
+      folders.forEach((f) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "folder-opt";
+        b.innerHTML = `<svg class="ic"><use href="#i-cards" /></svg>`;
+        b.append(createTextElement("span", f.name, "folder-opt-name"));
+        b.addEventListener("click", () => finishFolderPick(f));
+        list.append(b);
+      });
+      wrap.append(list);
+    }
+
+    const create = document.createElement("div");
+    create.className = "folder-create";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = t("folder.placeholder");
+    input.maxLength = 60;
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "pbtn primary";
+    add.textContent = t("folder.create");
+    const submit = async () => {
+      const name = input.value.trim();
+      if (!name) { toast(t("toast.folderNeedsName")); input.focus(); return; }
+      const folder = await saveFolder({ name, color: nextDeckColor(folders) });
+      finishFolderPick(folder);
+    };
+    add.addEventListener("click", submit);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+    create.append(input, add);
+    wrap.append(create);
+
+    pendingFolderPick = resolve;
+    openModal(t("folder.title"), wrap);
+    setTimeout(() => input.focus(), 60);
+  });
+}
+function finishFolderPick(folder) {
+  const resolve = pendingFolderPick;
+  pendingFolderPick = null;
+  closeModal();
+  if (resolve) resolve(folder || null);
+}
+
+async function saveSense(record) {
+  if (!record || !currentLookup) return;
+  if (await hasVocab(record.id)) {
+    await removeVocab(record.id);
+    toast(t("toast.removedWord", { word: record.word }));
+  } else {
+    const folder = await ensureFolder();
+    if (!folder) return; // cancelled the folder picker
+    await saveVocab({ ...record, folderId: folder.id });
+    toast(t("toast.savedTo", { word: record.word, folder: folder.name }));
+    updateFolderChip();
+  }
   reflectSaveState();
 }
+
+// Popover quick-save targets the first sense of the first part of speech.
+async function toggleSaveCurrent() {
+  const group = currentLookup?.rows?.[0];
+  const sense = group?.senses?.[0];
+  if (!sense) return;
+  await saveSense(buildSenseRecord(group, sense));
+}
+
 async function reflectSaveState() {
-  if (!currentLookup) return;
-  const saved = await hasVocab(currentLookup.word);
-  popSave.classList.toggle("on", saved);
-  popSave.querySelector("use").setAttribute("href", saved ? "#i-check" : "#i-bookmark");
-  const chip = document.querySelector("#dict-save");
-  if (chip) {
-    chip.classList.toggle("on", saved);
-    chip.querySelector("use").setAttribute("href", saved ? "#i-check" : "#i-bookmark");
-    chip.querySelector("span").textContent = t(saved ? "dict.saved" : "dict.save");
+  // Popover bookmark mirrors the first sense.
+  const group = currentLookup?.rows?.[0];
+  const sense = group?.senses?.[0];
+  if (sense) {
+    const saved = await hasVocab(buildSenseRecord(group, sense).id);
+    popSave.classList.toggle("on", saved);
+    popSave.querySelector("use").setAttribute("href", saved ? "#i-check" : "#i-bookmark");
   }
+  // Each per-sense button reflects its own saved state.
+  const buttons = [...dictionaryContent.querySelectorAll(".sense-save")];
+  await Promise.all(buttons.map(async (b) => {
+    const saved = await hasVocab(b.dataset.id);
+    b.classList.toggle("on", saved);
+    b.querySelector("use").setAttribute("href", saved ? "#i-check" : "#i-bookmark");
+  }));
+}
+
+// "Saving to: <folder>" chip in the dictionary header — shows the target and
+// lets the reader switch it for this book.
+async function updateFolderChip() {
+  const chip = document.querySelector("#dict-folder");
+  if (!chip) return;
+  const id = localStorage.getItem(bookFolderKey()) || currentFolderId;
+  const folder = id ? await getFolder(id) : null;
+  const label = chip.querySelector(".dict-folder-name");
+  label.textContent = folder ? folder.name : t("folder.default");
 }
 popSave.addEventListener("click", toggleSaveCurrent);
 
@@ -1472,19 +2256,21 @@ function renderDictionaryResult(word, groups) {
 
   const actions = document.createElement("div");
   actions.className = "dict-actions";
-  const saveChip = document.createElement("button");
-  saveChip.type = "button";
-  saveChip.id = "dict-save";
-  saveChip.className = "dict-chip";
-  saveChip.innerHTML = `<svg class="ic"><use href="#i-bookmark" /></svg><span>${t("dict.save")}</span>`;
-  saveChip.addEventListener("click", toggleSaveCurrent);
+  const folderChip = document.createElement("button");
+  folderChip.type = "button";
+  folderChip.id = "dict-folder";
+  folderChip.className = "dict-chip";
+  folderChip.title = t("folder.change");
+  folderChip.innerHTML = `<svg class="ic"><use href="#i-cards" /></svg><span class="dict-folder-lbl">${t("folder.savingTo")}</span> <span class="dict-folder-name"></span> <svg class="ic chev"><use href="#i-down" /></svg>`;
+  folderChip.addEventListener("click", async () => { const f = await ensureFolder({ force: true }); if (f) updateFolderChip(); });
   const listenChip = document.createElement("button");
   listenChip.type = "button";
   listenChip.className = "dict-chip";
   listenChip.innerHTML = `<svg class="ic"><use href="#i-volume" /></svg><span>${t("dict.listen")}</span>`;
   listenChip.addEventListener("click", () => speak(word));
-  actions.append(saveChip, listenChip);
+  actions.append(folderChip, listenChip);
   dictionaryContent.append(actions);
+  updateFolderChip();
 
   const tabs = document.createElement("div");
   tabs.className = "pos-tabs";
@@ -1501,8 +2287,9 @@ function renderDictionaryResult(word, groups) {
     forms.textContent = group.forms || "";
     forms.hidden = !group.forms;
     body.replaceChildren();
-    group.senses.forEach((sense, index) => body.append(buildSense(sense, index + 1)));
+    group.senses.forEach((sense, index) => body.append(buildSense(group, sense, index + 1)));
     if (group.phrases.length) body.append(buildPhrases(group.phrases));
+    reflectSaveState();
   }
 
   groups.forEach((group) => {
@@ -1518,13 +2305,23 @@ function renderDictionaryResult(word, groups) {
   selectGroup(groups[0]);
 }
 
-function buildSense(sense, number) {
+function buildSense(group, sense, number) {
   const section = document.createElement("section");
   section.className = "sense";
   const headRow = document.createElement("div");
   headRow.className = "sense-head";
   headRow.append(createTextElement("span", `${number}.`, "sense-num"));
   headRow.append(createTextElement("span", sense.translations.join(", "), "sense-translation"));
+  // Each translation gets its own bookmark — save this exact sense as a card.
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "sense-save";
+  save.dataset.id = buildSenseRecord(group, sense).id;
+  save.title = t("pop.saveWord");
+  save.setAttribute("aria-label", t("pop.saveWord"));
+  save.innerHTML = `<svg class="ic"><use href="#i-bookmark" /></svg>`;
+  save.addEventListener("click", () => saveSense(buildSenseRecord(group, sense)));
+  headRow.append(save);
   section.append(headRow);
   if (sense.note) section.append(createTextElement("div", sense.note, "sense-note"));
 
