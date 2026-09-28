@@ -1,7 +1,23 @@
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Proxy for the Wisdom dictionary API.
+//
+// The API sends Access-Control-Allow-Origin only for its own site, so the
+// browser blocks a direct call. The page fetches same-origin "/wisdom-api/..."
+// and the Vite server makes the real request server-side. Used by both
+// `npm run dev` and `npm run preview`.
+const wisdomProxy = {
+  "/wisdom-api": {
+    target: "https://new-api.wisdomedu.uz",
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/wisdom-api/, "/api/v1"),
+  },
+};
+
 export default defineConfig({
+  server: { proxy: wisdomProxy },
+  preview: { proxy: wisdomProxy },
   plugins: [
     VitePWA({
       registerType: "autoUpdate",
